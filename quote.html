@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>170 Eldridge — Quote Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0f0f12;--ink2:#2a2a35;--muted:#6b6b7e;--border:#e2e2ea;--bg:#f7f7fa;--card:#ffffff;
+  --accent:#1a1a2e;--accent2:#0f3460;--gold:#c9a84c;
+  --green-bg:#edfaf3;--green-border:#a3ddc0;--green-text:#1a6b42;
+  --amber-bg:#fef9ec;--amber-border:#f5d97a;--amber-text:#7a5c00;
+  --red-bg:#fdf2f2;--red-text:#b83232;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+
+.site-header{background:var(--accent);padding:0 48px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-family:'DM Serif Display',serif;font-size:1.1rem;color:#fff;letter-spacing:.03em}
+.logo em{color:var(--gold);font-style:normal}
+.header-right{display:flex;align-items:center;gap:16px}
+.header-tag{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.35)}
+.header-btn{font-family:'DM Sans',sans-serif;font-size:.8rem;padding:7px 16px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.8);cursor:pointer;transition:all .15s}
+.header-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+.header-btn.gold{background:var(--gold);color:var(--accent);border-color:var(--gold);font-weight:500}
+.header-btn.gold:hover{opacity:.9}
+
+.layout{display:grid;grid-template-columns:1fr 340px;gap:24px;max-width:1200px;margin:0 auto;padding:36px 24px 80px;align-items:start}
+
+.col-left{display:flex;flex-direction:column;gap:14px}
+
+.section{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:box-shadow .15s}
+.section:focus-within{box-shadow:0 0 0 3px rgba(15,52,96,.08)}
+.sec-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:background .15s}
+.sec-head:hover{background:#fafafa}
+.sec-head-left{display:flex;align-items:center;gap:10px}
+.sec-icon{width:30px;height:30px;border-radius:7px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sec-label{font-size:.92rem;font-weight:500;color:var(--ink)}
+.sec-total{font-family:'DM Mono',monospace;font-size:.85rem;font-weight:500;color:var(--ink)}
+.sec-chevron{color:var(--muted);transition:transform .2s;flex-shrink:0}
+.collapsed .sec-chevron{transform:rotate(-90deg)}
+.sec-body{padding:18px 20px}
+.collapsed .sec-body{display:none}
+
+.field-grid{display:grid;gap:14px;margin-bottom:14px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:1fr 1fr 1fr}
+.g1{grid-template-columns:1fr}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.field input,.field select{font-family:'DM Sans',sans-serif;font-size:.875rem;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 11px;outline:none;width:100%;transition:border-color .15s,box-shadow .15s;appearance:none}
+.field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6b7e'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;cursor:pointer}
+.field input:focus,.field select:focus{border-color:var(--accent2);background:var(--card);box-shadow:0 0 0 3px rgba(15,52,96,.07)}
+.field .hint{font-size:.7rem;color:var(--muted);margin-top:3px}
+
+.sec-sub{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--border);margin:18px 0 12px}
+.divider{height:1px;background:var(--border);margin:16px 0}
+
+.line-items{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)}
+.li:last-child{border-bottom:none}
+.li-l{display:flex;align-items:center;gap:10px;min-width:0}
+.chk{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.chk.on{background:var(--accent);border-color:var(--accent)}
+.chk svg{display:none}
+.chk.on svg{display:block}
+.li-name{font-size:.875rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-sub{font-size:.72rem;color:var(--muted);margin-top:2px}
+.li-r{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px}
+.qty-input{width:50px;font-size:.8rem;padding:4px 6px;text-align:center;border-radius:5px}
+.li-amt{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:500;color:var(--ink);min-width:72px;text-align:right}
+.li-amt.dim{color:var(--muted)}
+
+.sponsor-header{display:grid;grid-template-columns:1fr 160px 110px 28px;gap:8px;padding:0 0 7px;border-bottom:1px solid var(--border);margin-bottom:2px}
+.sp-hdr{font-size:.65rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.sponsor-row{display:grid;grid-template-columns:1fr 160px 110px 28px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.sponsor-row:last-child{border-bottom:none}
+.sponsor-row input,.sponsor-row select{font-size:.8rem;padding:5px 9px}
+.sp-del{width:28px;height:28px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;color:var(--muted);font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0}
+.sp-del:hover{border-color:var(--red-text);color:var(--red-text);background:var(--red-bg)}
+.sp-custom{grid-column:1/-1;padding-bottom:4px}
+.sp-custom input{width:200px;font-size:.8rem;padding:5px 9px}
+
+.add-btn{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--muted);background:transparent;border:1.5px dashed var(--border);border-radius:7px;padding:8px 14px;cursor:pointer;width:100%;margin-top:10px;transition:all .15s}
+.add-btn:hover{border-color:var(--accent2);color:var(--accent2);background:#f5f7fc}
+
+.col-right{display:flex;flex-direction:column;gap:14px;position:sticky;top:88px}
+
+.quote-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.qc-head{padding:14px 18px;background:var(--accent);display:flex;align-items:center;justify-content:space-between}
+.qc-title{font-family:'DM Serif Display',serif;font-size:1rem;color:#fff;font-weight:400}
+.qc-ref{font-family:'DM Mono',monospace;font-size:.65rem;color:rgba(255,255,255,.45)}
+.qc-body{padding:16px 18px}
+
+.qp-sec{margin-bottom:14px}
+.qp-sec-title{font-size:.65rem;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.ql{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;font-size:.82rem}
+.ql .qll{color:var(--muted)}
+.ql .qlr{font-family:'DM Mono',monospace;font-weight:500;color:var(--ink)}
+.ql .qlr.dim{color:var(--muted);font-weight:400}
+.ql.indent{padding-left:10px}
+.ql.indent .qll{font-size:.75rem;color:var(--muted)}
+.ql.indent .qlr{font-size:.75rem;font-weight:400}
+
+.totals{border-top:1px solid var(--border);padding-top:12px;margin-top:4px}
+.tl{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:.82rem}
+.tl .tll{color:var(--muted)}
+.tl .tlr{font-family:'DM Mono',monospace;font-weight:500;color:var(--ink)}
+.tl.grand{padding-top:8px;margin-top:4px;border-top:1px solid var(--border)}
+.tl.grand .tll{font-size:.95rem;font-weight:500;color:var(--ink)}
+.tl.grand .tlr{font-size:1.15rem;color:var(--ink)}
+.tl.green .tll,.tl.green .tlr{color:var(--green-text)}
+.tl.green-grand .tll{font-size:.95rem;font-weight:500;color:var(--green-text)}
+.tl.green-grand .tlr{font-size:1.15rem;color:var(--green-text)}
+
+.sponsor-scenario{border-radius:7px;padding:10px 12px;margin-top:8px}
+.sponsor-scenario.confirmed{background:var(--green-bg);border:1px solid var(--green-border)}
+.sponsor-scenario.potential{background:var(--amber-bg);border:1px solid var(--amber-border)}
+.ss-title{font-size:.65rem;font-weight:500;letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
+.confirmed .ss-title{color:var(--green-text)}
+.potential .ss-title{color:var(--amber-text)}
+.ss-row{display:flex;justify-content:space-between;font-size:.78rem;padding:2px 0}
+.confirmed .ss-row{color:var(--green-text)}
+.potential .ss-row{color:var(--amber-text)}
+.ss-row.total{font-weight:500;padding-top:5px;margin-top:3px;border-top:1px solid}
+.confirmed .ss-row.total{border-color:var(--green-border)}
+.potential .ss-row.total{border-color:var(--amber-border)}
+
+.dep-badge{display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:3px 9px;border-radius:99px;margin-top:6px}
+.dep-badge.ref{background:var(--green-bg);color:var(--green-text);border:1px solid var(--green-border)}
+.dep-badge.nonref{background:var(--amber-bg);color:var(--amber-text);border:1px solid var(--amber-border)}
+
+.action-row{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.act-btn{width:100%;padding:10px 16px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--border);background:transparent;color:var(--ink2)}
+.act-btn:hover{background:var(--bg)}
+.act-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.act-btn.primary:hover{background:#111126}
+.act-btn.gold{background:var(--gold);color:var(--accent);border-color:var(--gold)}
+.act-btn.gold:hover{opacity:.9}
+
+.print-header{display:none}
+
+@media print{
+  .site-header,.header-btn,.col-right .action-row,.add-btn,.sp-del,.chk{display:none!important}
+  .layout{grid-template-columns:1fr;gap:0;padding:0;max-width:100%}
+  .col-right{position:static}
+  .quote-card{border:none;box-shadow:none}
+  .qc-head{background:#1a1a2e!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .print-header{display:block;margin-bottom:24px}
+  body{background:#fff}
+  .section{border:1px solid #e2e2ea;margin-bottom:12px}
+}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .col-right{position:static}
+  .site-header{padding:0 20px}
+  .g3{grid-template-columns:1fr 1fr}
+  .sponsor-header,.sponsor-row{grid-template-columns:1fr 130px 90px 28px}
+}
+@media(max-width:560px){
+  .g2,.g3{grid-template-columns:1fr}
+  .sponsor-header,.sponsor-row{grid-template-columns:1fr 28px}
+  .sponsor-row select,.sp-hdr:not(:first-child):not(:last-child),.sponsor-row select:nth-child(3){display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="logo">170 <em>Eldridge</em> LLC</div>
+  <div class="header-right">
+    <span class="header-tag">Quote Builder</span>
+    <button class="header-btn" id="back-btn" onclick="window.location.href='index.html'" style="display:none">← Hub</button>
+    <button class="header-btn" onclick="window.print()">Print / save PDF</button>
+    <button class="header-btn gold" onclick="copyQuote()">Copy quote</button>
+  </div>
+</header>
+
+<!-- Pre-fill banner (shown when opened from hub) -->
+<div id="prefill-banner" style="display:none;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 24px;display:none;align-items:center;justify-content:space-between;font-size:.8rem;gap:12px">
+  <div style="display:flex;align-items:center;gap:10px;color:#1e40af">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#1e40af" stroke-width="1.3"/><path d="M7 4v3.5l2 2" stroke="#1e40af" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <span>Pre-filled from inquiry <strong id="prefill-ref-q"></strong> — <span id="prefill-name-q" style="font-style:italic"></span>. Review all values before copying.</span>
+  </div>
+  <button onclick="document.getElementById('prefill-banner').style.display='none'" style="background:transparent;border:none;color:#1e40af;cursor:pointer;font-size:16px;line-height:1">×</button>
+</div>
+
+<div class="layout">
+<div class="col-left">
+
+  <!-- ── VENUE ── -->
+  <div class="section" id="sec-venue">
+    <div class="sec-head" onclick="toggleSec('venue')">
+      <div class="sec-head-left">
+        <div class="sec-icon">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1.5" y="5" width="12" height="9" rx="1.5" stroke="var(--muted)" stroke-width="1.3"/><path d="M5 5V4a2.5 2.5 0 015 0v1" stroke="var(--muted)" stroke-width="1.3"/><rect x="5.5" y="8" width="4" height="3" rx="0.5" stroke="var(--muted)" stroke-width="1.1"/></svg>
+        </div>
+        <span class="sec-label">Venue rental</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="sec-total" id="tot-venue">$0</span>
+        <svg class="sec-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="sec-body">
+      <div class="field-grid g3">
+        <div class="field">
+          <label>Day of week</label>
+          <select id="dow" onchange="calc()">
+            <option value="1.0">Monday</option>
+            <option value="1.0">Tuesday</option>
+            <option value="1.0">Wednesday</option>
+            <option value="1.1">Thursday</option>
+            <option value="1.25" selected>Friday</option>
+            <option value="1.4">Saturday</option>
+            <option value="1.15">Sunday</option>
+          </select>
+          <div class="hint">Fri ×1.25 · Sat ×1.40 · Sun ×1.15</div>
+        </div>
+        <div class="field">
+          <label>Max occupancy tier</label>
+          <select id="occupancy" onchange="calc()">
+            <option value="50,4500">Up to 50 guests — $4,500</option>
+            <option value="100,6500">Up to 100 guests — $6,500</option>
+            <option value="150,8500" selected>Up to 150 guests — $8,500</option>
+          </select>
+          <div class="hint">Base rate at 12 hrs</div>
+        </div>
+        <div class="field">
+          <label>Total rental hours</label>
+          <select id="hours" onchange="calc()">
+            <option value="4">4 hours</option>
+            <option value="6">6 hours</option>
+            <option value="8">8 hours</option>
+            <option value="10">10 hours</option>
+            <option value="12" selected>12 hours</option>
+          </select>
+          <div class="hint">Client access to final vacate</div>
+        </div>
+      </div>
+      <div class="field-grid g2">
+        <div class="field">
+          <label>Setup / load-in hours</label>
+          <select id="setupHours" onchange="calc()">
+            <option value="0">None included</option>
+            <option value="1">1 hour — $250</option>
+            <option value="2" selected>2 hours — $500</option>
+            <option value="3">3 hours — $750</option>
+            <option value="4">4 hours — $1,000</option>
+          </select>
+          <div class="hint">Before event; billed at $250/hr</div>
+        </div>
+        <div class="field">
+          <label>Cleaning fee</label>
+          <select id="cleaningFee" onchange="calc()">
+            <option value="350">Standard — $350</option>
+            <option value="550" selected>Enhanced (100–150 guests) — $550</option>
+            <option value="750">Deep clean / large event — $750</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EQUIPMENT ── -->
+  <div class="section" id="sec-equip">
+    <div class="sec-head" onclick="toggleSec('equip')">
+      <div class="sec-head-left">
+        <div class="sec-icon">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="var(--muted)" stroke-width="1.3"/><path d="M5 7.5h5M7.5 5v5" stroke="var(--muted)" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="1.5" fill="var(--muted)"/></svg>
+        </div>
+        <span class="sec-label">Production & equipment</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="sec-total" id="tot-equip">$0</span>
+        <svg class="sec-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="sec-body">
+      <div class="line-items" id="equip-items">
+        <div class="li" data-base="850">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">PA / main speaker system</div><div class="li-sub">L+R mains, sub, amp rack</div></div>
+          </div>
+          <div class="li-r"><span class="li-amt">$850</span></div>
+        </div>
+        <div class="li" data-base="450">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">DJ booth & mixer setup</div><div class="li-sub">CDJs, mixer, monitor, decibel meter</div></div>
+          </div>
+          <div class="li-r"><span class="li-amt">$450</span></div>
+        </div>
+        <div class="li" data-base="600">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Lighting rig</div><div class="li-sub">Moving heads, LED wash, DMX controller</div></div>
+          </div>
+          <div class="li-r"><span class="li-amt">$600</span></div>
+        </div>
+        <div class="li" data-base="280">
+          <div class="li-l">
+            <div class="chk" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Haze / fog machine</div><div class="li-sub">Professional haze unit + fluid</div></div>
+          </div>
+          <div class="li-r"><span class="li-amt dim">$280</span></div>
+        </div>
+        <div class="li" data-base="350">
+          <div class="li-l">
+            <div class="chk" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Projector / LED screen</div><div class="li-sub">Visual display for branded content or visuals</div></div>
+          </div>
+          <div class="li-r"><span class="li-amt dim">$350</span></div>
+        </div>
+        <div class="li" data-base="200">
+          <div class="li-l">
+            <div class="chk" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Wireless mic package</div><div class="li-sub">2× handheld + stands</div></div>
+          </div>
+          <div class="li-r"><span class="li-amt dim">$200</span></div>
+        </div>
+        <div class="li" data-base="180">
+          <div class="li-l">
+            <div class="chk" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Backline / live music setup</div><div class="li-sub">Stage monitors, DI boxes, stands</div></div>
+          </div>
+          <div class="li-r"><span class="li-amt dim">$180</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STAFF ── -->
+  <div class="section" id="sec-staff">
+    <div class="sec-head" onclick="toggleSec('staff')">
+      <div class="sec-head-left">
+        <div class="sec-icon">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="5.5" cy="4.5" r="2" stroke="var(--muted)" stroke-width="1.3"/><circle cx="10" cy="4.5" r="2" stroke="var(--muted)" stroke-width="1.3"/><path d="M1.5 13c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="var(--muted)" stroke-width="1.3" stroke-linecap="round"/><path d="M10.5 9.2c1.7.4 3 1.9 3 3.8" stroke="var(--muted)" stroke-width="1.3" stroke-linecap="round"/></svg>
+        </div>
+        <span class="sec-label">Staff & supplies</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="sec-total" id="tot-staff">$0</span>
+        <svg class="sec-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="sec-body">
+      <div class="field-grid g3" style="margin-bottom:16px">
+        <div class="field">
+          <label>Staffed event hours</label>
+          <select id="staffHours" onchange="calc()">
+            <option value="4">4 hrs</option>
+            <option value="5">5 hrs</option>
+            <option value="6">6 hrs</option>
+            <option value="7" selected>7 hrs</option>
+            <option value="8">8 hrs</option>
+            <option value="10">10 hrs</option>
+          </select>
+          <div class="hint">Hours staff are actively working</div>
+        </div>
+        <div class="field">
+          <label>Bar setup</label>
+          <select id="barSetup" onchange="syncBarStaff()">
+            <option value="0">No bar</option>
+            <option value="1">1 bar station</option>
+            <option value="2" selected>2 bar stations</option>
+            <option value="3">3 bar stations</option>
+          </select>
+          <div class="hint">Auto-sets 2 bartenders per station</div>
+        </div>
+        <div class="field">
+          <label>Coat check</label>
+          <select id="coatCheck" onchange="syncCoatStaff()">
+            <option value="0">Not needed</option>
+            <option value="1" selected>1 attendant</option>
+            <option value="2">2 attendants</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="line-items" id="staff-items">
+        <div class="li" data-rate="38" data-id="security">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Security</div><div class="li-sub">$38/hr per guard — required for all events</div></div>
+          </div>
+          <div class="li-r">
+            <input class="qty-input" type="number" min="1" max="10" value="3" id="qty-security" onchange="calc()" title="Headcount">
+            <span class="li-amt" id="amt-security">—</span>
+          </div>
+        </div>
+        <div class="li" data-rate="32" data-id="bar">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Bartenders</div><div class="li-sub">$32/hr — 2 per station recommended</div></div>
+          </div>
+          <div class="li-r">
+            <input class="qty-input" type="number" min="0" max="12" value="4" id="qty-bar" onchange="calc()" title="Headcount">
+            <span class="li-amt" id="amt-bar">—</span>
+          </div>
+        </div>
+        <div class="li" data-rate="28" data-id="door">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Venue door host</div><div class="li-sub">$28/hr — venue-side entry coordination</div></div>
+          </div>
+          <div class="li-r">
+            <input class="qty-input" type="number" min="1" max="4" value="1" id="qty-door" onchange="calc()" title="Headcount">
+            <span class="li-amt" id="amt-door">—</span>
+          </div>
+        </div>
+        <div class="li" data-rate="25" data-id="coat">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Coat check</div><div class="li-sub">$25/hr per attendant</div></div>
+          </div>
+          <div class="li-r">
+            <input class="qty-input" type="number" min="0" max="3" value="1" id="qty-coat" onchange="calc()" title="Headcount">
+            <span class="li-amt" id="amt-coat">—</span>
+          </div>
+        </div>
+        <div class="li" data-rate="30" data-id="prod">
+          <div class="li-l">
+            <div class="chk on" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Production / AV tech</div><div class="li-sub">$30/hr — audio-visual supervision</div></div>
+          </div>
+          <div class="li-r">
+            <input class="qty-input" type="number" min="1" max="4" value="1" id="qty-prod" onchange="calc()" title="Headcount">
+            <span class="li-amt" id="amt-prod">—</span>
+          </div>
+        </div>
+        <div class="li" data-rate="22" data-id="cleaning-staff">
+          <div class="li-l">
+            <div class="chk" onclick="toggleLI(this)"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="li-name">Cleaning / breakdown crew</div><div class="li-sub">$22/hr per person — end-of-event</div></div>
+          </div>
+          <div class="li-r">
+            <input class="qty-input" type="number" min="1" max="6" value="2" id="qty-cleaning-staff" onchange="calc()" title="Headcount">
+            <span class="li-amt dim" id="amt-cleaning-staff">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sec-sub">Supplies & consumables</div>
+      <div class="field-grid g3">
+        <div class="field">
+          <label>Bar supplies allowance</label>
+          <select id="barSupplies" onchange="calc()">
+            <option value="0">Client-supplied — $0</option>
+            <option value="300">Basic — $300</option>
+            <option value="600" selected>Standard — $600</option>
+            <option value="900">Premium — $900</option>
+            <option value="1400">Top shelf — $1,400</option>
+          </select>
+          <div class="hint">Mixers, ice, garnish, consumables</div>
+        </div>
+        <div class="field">
+          <label>Décor / linen allowance</label>
+          <select id="decor" onchange="calc()">
+            <option value="0">None — $0</option>
+            <option value="200">Minimal — $200</option>
+            <option value="400" selected>Standard — $400</option>
+            <option value="700">Enhanced — $700</option>
+            <option value="1200">Premium — $1,200</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Misc. supplies buffer</label>
+          <select id="misc" onchange="calc()">
+            <option value="0">None</option>
+            <option value="150" selected>Standard — $150</option>
+            <option value="300">Large event — $300</option>
+            <option value="500">Complex event — $500</option>
+          </select>
+          <div class="hint">Paper goods, tape, batteries, etc.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SPONSORSHIPS ── -->
+  <div class="section" id="sec-sponsor">
+    <div class="sec-head" onclick="toggleSec('sponsor')">
+      <div class="sec-head-left">
+        <div class="sec-icon">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 2v11M2 7.5h11" stroke="var(--muted)" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="5.5" stroke="var(--muted)" stroke-width="1.3"/></svg>
+        </div>
+        <span class="sec-label">Sponsorships</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="sec-total" id="tot-sponsor" style="color:var(--green-text)">—</span>
+        <svg class="sec-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="sec-body">
+      <p style="font-size:.8rem;color:var(--muted);line-height:1.65;margin-bottom:14px">Add confirmed or potential sponsors. Each can cover a specific cost category or a fixed dollar amount. The quote shows three totals: gross, net of confirmed sponsors, and net if all potential sponsors come through.</p>
+      <div class="sponsor-header">
+        <div class="sp-hdr">Sponsor / brand</div>
+        <div class="sp-hdr">Covers</div>
+        <div class="sp-hdr">Status</div>
+        <div></div>
+      </div>
+      <div id="sponsor-list"></div>
+      <button class="add-btn" onclick="addSponsor()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Add sponsorship
+      </button>
+    </div>
+  </div>
+
+  <!-- ── ADJUSTMENTS ── -->
+  <div class="section" id="sec-adj">
+    <div class="sec-head" onclick="toggleSec('adj')">
+      <div class="sec-head-left">
+        <div class="sec-icon">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2.5 7.5h10m-4-4l4 4-4 4" stroke="var(--muted)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sec-label">Adjustments & deposit</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="sec-total" id="tot-adj">—</span>
+        <svg class="sec-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="sec-body">
+      <div class="field-grid g2">
+        <div class="field">
+          <label>Discount / credit ($)</label>
+          <input type="number" id="discount" value="0" min="0" step="50" onchange="calc()" placeholder="0">
+          <div class="hint">Returning client, promotional, etc.</div>
+        </div>
+        <div class="field">
+          <label>Additional charges ($)</label>
+          <input type="number" id="surcharge" value="0" min="0" step="50" onchange="calc()" placeholder="0">
+          <div class="hint">Overtime, special requests, etc.</div>
+        </div>
+      </div>
+      <div class="field-grid g2">
+        <div class="field">
+          <label>Security deposit</label>
+          <select id="depType" onchange="calc()">
+            <option value="3400,refundable" selected>$3,400 — refundable</option>
+            <option value="2500,refundable">$2,500 — refundable</option>
+            <option value="5000,refundable">$5,000 — refundable</option>
+            <option value="1500,non-refundable">$1,500 — non-refundable (credited)</option>
+            <option value="0,none">No deposit</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Tax / service charge</label>
+          <select id="taxRate" onchange="calc()">
+            <option value="0">No tax / charge</option>
+            <option value="0.08875" selected>NYC sales tax — 8.875%</option>
+            <option value="0.10">Service charge — 10%</option>
+            <option value="0.15">Service charge — 15%</option>
+            <option value="0.18">Service charge — 18%</option>
+            <option value="0.20">Service charge — 20%</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /col-left -->
+
+<!-- ── QUOTE PANEL ── -->
+<div class="col-right">
+  <div class="quote-card">
+    <div class="qc-head">
+      <div class="qc-title">Quote summary</div>
+      <div class="qc-ref" id="qcRef">—</div>
+    </div>
+    <div class="qc-body">
+
+      <div class="qp-sec">
+        <div class="qp-sec-title">Venue rental</div>
+        <div id="qp-venue"></div>
+      </div>
+
+      <div class="qp-sec">
+        <div class="qp-sec-title">Production & equipment</div>
+        <div id="qp-equip"></div>
+      </div>
+
+      <div class="qp-sec">
+        <div class="qp-sec-title">Staff & supplies</div>
+        <div id="qp-staff"></div>
+      </div>
+
+      <div id="qp-sponsor-wrap" style="display:none">
+        <div class="qp-sec">
+          <div class="qp-sec-title" style="color:var(--green-text);border-color:var(--green-border)">Sponsorship coverage</div>
+          <div id="qp-sponsor"></div>
+        </div>
+      </div>
+
+      <div class="totals" id="qp-totals"></div>
+
+      <div class="action-row">
+        <button class="act-btn primary" onclick="copyQuote()">Copy quote text</button>
+        <button id="save-return-btn" class="act-btn gold" onclick="saveAndReturn()" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5l3.5 3.5 5.5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Save to Hub & return
+        </button>
+        <button class="act-btn" onclick="window.print()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="4" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M4 4V2h6v2M4 11v1h6v-1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Print / save PDF
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="font-size:.72rem;color:var(--muted);line-height:1.7;padding:4px 2px">
+    All rates are estimates based on standard 170 Eldridge LLC pricing. Final quote subject to review. Not a binding contract until countersigned.
+  </div>
+</div>
+
+</div><!-- /layout -->
+
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>'$'+Math.round(n).toLocaleString('en-US');
+const fmtN=n=>Math.round(n).toLocaleString('en-US');
+
+function toggleSec(id){
+  $('sec-'+id).classList.toggle('collapsed');
+}
+
+function toggleLI(el){
+  el.classList.toggle('on');
+  const row=el.closest('.li');
+  const amt=row.querySelector('.li-amt');
+  if(amt) amt.classList.toggle('dim',!el.classList.contains('on'));
+  calc();
+}
+
+function syncBarStaff(){
+  const n=parseInt($('barSetup').value)||0;
+  const qtyEl=$('qty-bar');
+  if(qtyEl) qtyEl.value=n*2;
+  const barLI=$('qty-bar')?.closest('.li');
+  const chk=barLI?.querySelector('.chk');
+  if(chk){
+    if(n===0){chk.classList.remove('on'); barLI.querySelector('.li-amt').classList.add('dim');}
+    else{chk.classList.add('on'); barLI.querySelector('.li-amt').classList.remove('dim');}
+  }
+  calc();
+}
+
+function syncCoatStaff(){
+  const n=parseInt($('coatCheck').value)||0;
+  const qtyEl=$('qty-coat');
+  if(qtyEl) qtyEl.value=Math.max(n,1);
+  const coatLI=qtyEl?.closest('.li');
+  const chk=coatLI?.querySelector('.chk');
+  if(chk){
+    if(n===0){chk.classList.remove('on'); coatLI.querySelector('.li-amt').classList.add('dim');}
+    else{chk.classList.add('on'); coatLI.querySelector('.li-amt').classList.remove('dim');}
+  }
+  calc();
+}
+
+let sponsors=[], spId=0;
+const COST_CATS=[
+  {v:'venue',l:'Venue rental'},
+  {v:'equip',l:'Production & equipment'},
+  {v:'staff',l:'Staff costs'},
+  {v:'supplies',l:'Bar & supplies'},
+  {v:'cleaning',l:'Cleaning fee'},
+  {v:'custom',l:'Custom amount ($)'},
+];
+
+function addSponsor(){
+  const id=spId++;
+  sponsors.push({id,name:'',covers:'venue',status:'potential',amount:0});
+  renderSponsors(); calc();
+}
+function removeSponsor(id){
+  sponsors=sponsors.filter(s=>s.id!==id);
+  renderSponsors(); calc();
+}
+function updateSponsor(id,key,val){
+  const s=sponsors.find(x=>x.id===id);
+  if(s) s[key]=val;
+  if(key==='covers') renderSponsors();
+  calc();
+}
+function renderSponsors(){
+  const list=$('sponsor-list');
+  list.innerHTML='';
+  sponsors.forEach(s=>{
+    const row=document.createElement('div');
+    row.className='sponsor-row';
+    row.innerHTML=`
+      <input type="text" placeholder="Sponsor name" value="${s.name}" onchange="updateSponsor(${s.id},'name',this.value)" style="font-size:.8rem;padding:5px 9px">
+      <select onchange="updateSponsor(${s.id},'covers',this.value)" style="font-size:.8rem;padding:5px 9px">
+        ${COST_CATS.map(c=>`<option value="${c.v}"${s.covers===c.v?' selected':''}>${c.l}</option>`).join('')}
+      </select>
+      <select onchange="updateSponsor(${s.id},'status',this.value)" style="font-size:.8rem;padding:5px 9px">
+        <option value="confirmed"${s.status==='confirmed'?' selected':''}>Confirmed</option>
+        <option value="potential"${s.status==='potential'?' selected':''}>Potential</option>
+      </select>
+      <button class="sp-del" onclick="removeSponsor(${s.id})">×</button>`;
+    list.appendChild(row);
+    if(s.covers==='custom'){
+      const cr=document.createElement('div');
+      cr.className='sp-custom';
+      cr.innerHTML=`<input type="number" min="0" placeholder="Dollar amount" value="${s.amount||''}" onchange="updateSponsor(${s.id},'amount',+this.value)" style="font-size:.8rem;padding:5px 9px;width:200px">`;
+      list.appendChild(cr);
+    }
+  });
+}
+
+function calc(){
+  const dowMult=parseFloat($('dow').value);
+  const [,occBase]=($('occupancy').value).split(',').map(Number);
+  const occLabel=$('occupancy').options[$('occupancy').selectedIndex].text.split('—')[0].trim();
+  const hours=parseFloat($('hours').value);
+  const setupHours=parseFloat($('setupHours').value);
+  const cleaningFee=parseFloat($('cleaningFee').value);
+  const dowLabel=$('dow').options[$('dow').selectedIndex].text;
+
+  const baseRental=Math.round(occBase*dowMult*(hours/12));
+  const setupCost=setupHours*250;
+  const venueTotal=baseRental+setupCost+cleaningFee;
+  $('tot-venue').textContent=fmt(venueTotal);
+
+  let equipTotal=0;
+  const equipLines=[];
+  document.querySelectorAll('#equip-items .li').forEach(row=>{
+    const on=row.querySelector('.chk').classList.contains('on');
+    const base=parseFloat(row.dataset.base||0);
+    const name=row.querySelector('.li-name').textContent;
+    const amtEl=row.querySelector('.li-amt');
+    if(on){equipTotal+=base; equipLines.push({name,amt:base});}
+    if(amtEl) amtEl.textContent=fmt(base);
+  });
+  $('tot-equip').textContent=fmt(equipTotal);
+
+  const staffHrs=parseFloat($('staffHours').value);
+  let staffTotal=0;
+  const staffLines=[];
+  document.querySelectorAll('#staff-items .li').forEach(row=>{
+    const on=row.querySelector('.chk').classList.contains('on');
+    const rate=parseFloat(row.dataset.rate||0);
+    const id=row.dataset.id;
+    const qtyEl=$('qty-'+id);
+    const qty=qtyEl?parseFloat(qtyEl.value)||0:1;
+    const amtEl=$('amt-'+id);
+    const amt=rate*qty*staffHrs;
+    if(amtEl) amtEl.textContent=on?fmt(amt):'—';
+    if(on){staffTotal+=amt; staffLines.push({name:row.querySelector('.li-name').textContent,rate,qty,hrs:staffHrs,amt});}
+  });
+
+  const barSupplies=parseFloat($('barSupplies').value);
+  const decor=parseFloat($('decor').value);
+  const misc=parseFloat($('misc').value);
+  const suppliesTotal=barSupplies+decor+misc;
+  const staffAndSupplies=staffTotal+suppliesTotal;
+  $('tot-staff').textContent=fmt(staffAndSupplies);
+
+  const subtotal=venueTotal+equipTotal+staffAndSupplies;
+  const discount=parseFloat($('discount').value)||0;
+  const surcharge=parseFloat($('surcharge').value)||0;
+  const taxRate=parseFloat($('taxRate').value);
+  const [depAmtStr,depType]=$('depType').value.split(',');
+  const deposit=parseFloat(depAmtStr)||0;
+  const adjustedBase=subtotal-discount+surcharge;
+  const tax=Math.round(adjustedBase*taxRate);
+  const grandTotal=adjustedBase+tax;
+
+  $('tot-adj').textContent=(discount>0||surcharge>0)?(discount>0?`-${fmt(discount)}`:`+${fmt(surcharge)}`):'—';
+
+  const cats={venue:venueTotal,equip:equipTotal,staff:staffTotal,supplies:suppliesTotal,cleaning:cleaningFee};
+  let confirmedAmt=0, potentialAmt=0;
+  const spLines=[];
+  sponsors.forEach(s=>{
+    let amt=0;
+    if(s.covers==='custom') amt=s.amount||0;
+    else if(cats[s.covers]!==undefined) amt=cats[s.covers];
+    const label=s.name||'Unnamed sponsor';
+    const catLabel=COST_CATS.find(c=>c.v===s.covers)?.l||'Custom';
+    spLines.push({label,catLabel,amt,status:s.status});
+    if(s.status==='confirmed') confirmedAmt+=amt;
+    else potentialAmt+=amt;
+  });
+
+  const spTotal=confirmedAmt+potentialAmt;
+  $('tot-sponsor').textContent=spTotal>0?`-${fmt(spTotal)}`:'—';
+
+  const netConfirmed=grandTotal-confirmedAmt;
+  const netAll=grandTotal-confirmedAmt-potentialAmt;
+
+  const ref='QTE-'+Math.abs(Math.round(subtotal)).toString(36).toUpperCase().slice(0,5);
+  $('qcRef').textContent=ref;
+
+  $('qp-venue').innerHTML=`
+    <div class="ql indent"><span class="qll">Base rate (${occLabel}, ${hours} hrs, ${dowLabel})</span><span class="qlr">${fmt(baseRental)}</span></div>
+    ${setupHours>0?`<div class="ql indent"><span class="qll">Load-in / setup (${setupHours} hr${setupHours>1?'s':''} × $250)</span><span class="qlr">${fmt(setupCost)}</span></div>`:''}
+    <div class="ql indent"><span class="qll">Cleaning fee</span><span class="qlr">${fmt(cleaningFee)}</span></div>
+    <div class="ql" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px"><span class="qll" style="font-weight:500">Subtotal</span><span class="qlr">${fmt(venueTotal)}</span></div>`;
+
+  $('qp-equip').innerHTML=equipLines.length
+    ?equipLines.map(l=>`<div class="ql indent"><span class="qll">${l.name}</span><span class="qlr">${fmt(l.amt)}</span></div>`).join('')+`<div class="ql" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px"><span class="qll" style="font-weight:500">Subtotal</span><span class="qlr">${fmt(equipTotal)}</span></div>`
+    :`<div class="ql indent"><span class="qll" style="color:var(--muted)">No items selected</span><span class="qlr dim">$0</span></div>`;
+
+  let staffHTML=staffLines.map(l=>`<div class="ql indent"><span class="qll">${l.name} (${l.qty} × $${l.rate}/hr × ${l.hrs} hrs)</span><span class="qlr">${fmt(l.amt)}</span></div>`).join('');
+  if(barSupplies) staffHTML+=`<div class="ql indent"><span class="qll">Bar supplies & consumables</span><span class="qlr">${fmt(barSupplies)}</span></div>`;
+  if(decor) staffHTML+=`<div class="ql indent"><span class="qll">Décor / linen allowance</span><span class="qlr">${fmt(decor)}</span></div>`;
+  if(misc) staffHTML+=`<div class="ql indent"><span class="qll">Miscellaneous supplies</span><span class="qlr">${fmt(misc)}</span></div>`;
+  staffHTML+=`<div class="ql" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px"><span class="qll" style="font-weight:500">Subtotal</span><span class="qlr">${fmt(staffAndSupplies)}</span></div>`;
+  $('qp-staff').innerHTML=staffHTML;
+
+  const spWrap=$('qp-sponsor-wrap');
+  if(spLines.length>0){
+    spWrap.style.display='block';
+    $('qp-sponsor').innerHTML=spLines.map(s=>`
+      <div class="ql indent">
+        <span class="qll">${s.label} — ${s.catLabel}
+          <span style="font-size:.65rem;padding:1px 6px;border-radius:99px;margin-left:4px;background:${s.status==='confirmed'?'var(--green-bg)':'var(--amber-bg)'};color:${s.status==='confirmed'?'var(--green-text)':'var(--amber-text)'};">${s.status}</span>
+        </span>
+        <span class="qlr" style="color:var(--green-text)">-${fmt(s.amt)}</span>
+      </div>`).join('');
+  } else { spWrap.style.display='none'; }
+
+  let totHTML=`
+    <div class="tl"><span class="tll">Venue rental</span><span class="tlr">${fmt(venueTotal)}</span></div>
+    <div class="tl"><span class="tll">Production & equipment</span><span class="tlr">${fmt(equipTotal)}</span></div>
+    <div class="tl"><span class="tll">Staff & supplies</span><span class="tlr">${fmt(staffAndSupplies)}</span></div>`;
+  if(discount>0) totHTML+=`<div class="tl green"><span class="tll">Discount / credit</span><span class="tlr">-${fmt(discount)}</span></div>`;
+  if(surcharge>0) totHTML+=`<div class="tl"><span class="tll">Additional charges</span><span class="tlr">+${fmt(surcharge)}</span></div>`;
+  if(tax>0) totHTML+=`<div class="tl"><span class="tll">Tax / service charge (${(taxRate*100).toFixed(3)}%)</span><span class="tlr">${fmt(tax)}</span></div>`;
+  totHTML+=`<div class="tl grand"><span class="tll">Total (before sponsorship)</span><span class="tlr">${fmt(grandTotal)}</span></div>`;
+
+  if(confirmedAmt>0){
+    totHTML+=`<div style="margin-top:10px"><div class="sponsor-scenario confirmed">
+      <div class="ss-title">Confirmed sponsorship</div>
+      <div class="ss-row"><span>Coverage</span><span>-${fmt(confirmedAmt)}</span></div>
+      <div class="ss-row total"><span>Net due</span><span>${fmt(netConfirmed)}</span></div>
+    </div></div>`;
+  }
+  if(potentialAmt>0){
+    totHTML+=`<div style="margin-top:8px"><div class="sponsor-scenario potential">
+      <div class="ss-title">If potential sponsors confirm</div>
+      <div class="ss-row"><span>Additional coverage</span><span>-${fmt(potentialAmt)}</span></div>
+      <div class="ss-row total"><span>Net due (all sponsors)</span><span>${fmt(netAll)}</span></div>
+    </div></div>`;
+  }
+
+  if(deposit>0){
+    const isRef=depType==='refundable';
+    const dueAtSigning=(confirmedAmt>0?netConfirmed:grandTotal)-(isRef?0:deposit);
+    totHTML+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      <div class="tl"><span class="tll">${isRef?'Refundable security deposit':'Non-refundable deposit (credited)'}</span><span class="tlr">${fmt(deposit)}</span></div>
+      ${isRef?`<div style="margin-top:2px"><span class="dep-badge ref">Returned by 3 days post-event</span></div>`:`<div style="margin-top:2px"><span class="dep-badge nonref">Applied toward rental fee</span></div>`}
+      <div class="tl grand" style="margin-top:8px"><span class="tll">Due at signing</span><span class="tlr">${fmt(Math.max(0,dueAtSigning))}</span></div>
+    </div>`;
+  }
+
+  $('qp-totals').innerHTML=totHTML;
+
+  window._quoteData={ref,dowLabel,occLabel,hours,setupHours,cleaningFee,baseRental,setupCost,venueTotal,equipLines,equipTotal,staffLines,barSupplies,decor,misc,suppliesTotal,staffAndSupplies,subtotal,discount,surcharge,taxRate,tax,grandTotal,spLines,confirmedAmt,potentialAmt,netConfirmed,netAll,deposit,depType};
+  buildQuoteText();
+}
+
+function buildQuoteText(){
+  const d=window._quoteData;
+  if(!d) return;
+  const lines=[
+    `QUOTE — 170 ELDRIDGE LLC`,
+    `Reference: ${d.ref}`,
+    ``,
+    `── VENUE RENTAL ───────────────────────────── ${fmt(d.venueTotal)}`,
+    `   Base rate (${d.occLabel}, ${d.hours} hrs, ${d.dowLabel})    ${fmt(d.baseRental)}`,
+    d.setupHours>0?`   Setup / load-in (${d.setupHours} hrs × $250)        ${fmt(d.setupCost)}`:null,
+    `   Cleaning fee                               ${fmt(d.cleaningFee)}`,
+    ``,
+    `── PRODUCTION & EQUIPMENT ─────────────────── ${fmt(d.equipTotal)}`,
+    ...d.equipLines.map(l=>`   ${l.name.padEnd(40)} ${fmt(l.amt)}`),
+    ``,
+    `── STAFF & SUPPLIES ────────────────────────── ${fmt(d.staffAndSupplies)}`,
+    ...d.staffLines.map(l=>`   ${l.name} (${l.qty}×$${l.rate}/hr×${l.hrs}hrs)  ${fmt(l.amt)}`),
+    d.barSupplies>0?`   Bar supplies & consumables                ${fmt(d.barSupplies)}`:null,
+    d.decor>0?`   Décor / linen allowance                   ${fmt(d.decor)}`:null,
+    d.misc>0?`   Miscellaneous supplies                     ${fmt(d.misc)}`:null,
+    ``,
+    d.discount>0?`── DISCOUNT                                  -${fmt(d.discount)}`:null,
+    d.surcharge>0?`── ADDITIONAL CHARGES                        +${fmt(d.surcharge)}`:null,
+    d.tax>0?`── TAX / SERVICE CHARGE (${(d.taxRate*100).toFixed(3)}%)            ${fmt(d.tax)}`:null,
+    ``,
+    `═══════════════════════════════════════════════`,
+    `TOTAL (BEFORE SPONSORSHIP)                ${fmt(d.grandTotal)}`,
+    d.spLines.length>0?``:null,
+    ...(d.spLines.length>0?[
+      `── SPONSORSHIPS ───────────────────────────`,
+      ...d.spLines.map(s=>`   [${s.status.toUpperCase()}] ${s.label} — ${s.catLabel}   -${fmt(s.amt)}`),
+    ]:[]),
+    d.confirmedAmt>0?`NET DUE (CONFIRMED SPONSORS)              ${fmt(d.netConfirmed)}`:null,
+    d.potentialAmt>0?`NET DUE (ALL SPONSORS SECURED)            ${fmt(d.netAll)}`:null,
+    ``,
+    d.deposit>0?`SECURITY DEPOSIT (${d.depType})              ${fmt(d.deposit)}`:null,
+    ``,
+    `170 Eldridge Street, New York, NY 10002`,
+    `This quote is an estimate and is not a binding agreement until countersigned.`,
+  ].filter(x=>x!==null).join('\n');
+  window._quoteText=lines;
+}
+
+function copyQuote(){
+  if(!window._quoteText){calc();buildQuoteText();}
+  navigator.clipboard.writeText(window._quoteText).then(()=>{
+    const btns=document.querySelectorAll('.act-btn.primary, .header-btn.gold');
+    btns.forEach(b=>{const orig=b.textContent; b.textContent='Copied!'; setTimeout(()=>b.textContent=orig,1800);});
+  }).catch(()=>alert('Copy failed — please use Ctrl+C/Cmd+C'));
+}
+
+calc();
+
+// ── HUB INTEGRATION ──────────────────────────────────────────────────────────
+
+(function initHubPrefill() {
+  const raw = sessionStorage.getItem('170e_prefill');
+  if (!raw) return;
+
+  let prefill;
+  try { prefill = JSON.parse(raw); } catch { return; }
+  if (!prefill?.inquiry) return;
+
+  const inq = prefill.inquiry;
+
+  // Show UI elements
+  const banner = document.getElementById('prefill-banner');
+  if (banner) { banner.style.display = 'flex'; }
+  const refEl = document.getElementById('prefill-ref-q');
+  if (refEl) refEl.textContent = inq.refId;
+  const nameEl = document.getElementById('prefill-name-q');
+  if (nameEl) nameEl.textContent = `${inq.firstName} ${inq.lastName}`.trim();
+  const backBtn = document.getElementById('back-btn');
+  if (backBtn) backBtn.style.display = '';
+  const saveBtn = document.getElementById('save-return-btn');
+  if (saveBtn) saveBtn.style.display = '';
+
+  // ── Day of week from eventDate ──
+  if (inq.eventDate) {
+    const dow = new Date(inq.eventDate + 'T12:00:00').getDay(); // 0=Sun
+    const dowEl = document.getElementById('dow');
+    if (dowEl) {
+      // options: Mon, Tue, Wed, Thu, Fri(selected), Sat, Sun
+      const map = { 1:0, 2:1, 3:2, 4:3, 5:4, 6:5, 0:6 };
+      dowEl.selectedIndex = map[dow] ?? 4;
+    }
+  }
+
+  // ── Occupancy tier from guest count ──
+  if (inq.guestCount) {
+    const g = parseInt(inq.guestCount) || 0;
+    const occEl = document.getElementById('occupancy');
+    if (occEl) {
+      occEl.selectedIndex = g <= 50 ? 0 : g <= 100 ? 1 : 2;
+    }
+  }
+
+  // ── Rental hours from doorsOpen/doorsClose ──
+  if (inq.doorsOpen && inq.doorsClose) {
+    const hrs = calcHoursBetween(inq.doorsOpen, inq.doorsClose);
+    if (hrs > 0) {
+      const hoursEl = document.getElementById('hours');
+      if (hoursEl) {
+        const opts = [4, 6, 8, 10, 12];
+        const closest = opts.reduce((a, b) => Math.abs(b - hrs) < Math.abs(a - hrs) ? b : a);
+        hoursEl.value = String(closest);
+      }
+    }
+  }
+
+  // ── Bar setup from alcohol field + guest count ──
+  const alcohol = (inq.alcohol || '').toLowerCase();
+  const hasBar  = alcohol.startsWith('yes') || alcohol.includes('bar');
+  const noBar   = alcohol.startsWith('no');
+  const barEl   = document.getElementById('barSetup');
+  if (barEl) {
+    if (noBar) {
+      barEl.value = '0';
+    } else if (hasBar) {
+      const g = parseInt(inq.guestCount) || 100;
+      barEl.value = g <= 75 ? '1' : g <= 130 ? '2' : '3';
+    }
+    syncBarStaff && syncBarStaff();
+  }
+
+  // ── Security headcount from guest count ──
+  const secQty = document.getElementById('qty-security');
+  if (secQty && inq.guestCount) {
+    const g = parseInt(inq.guestCount) || 0;
+    secQty.value = g <= 75 ? '2' : g <= 125 ? '3' : '4';
+  }
+
+  // ── Hint: if client provides door staff, note in staffed hours ──
+  // (visual-only, no field to auto-set)
+
+  calc();
+})();
+
+function calcHoursBetween(openStr, closeStr) {
+  const toMins = s => {
+    const m = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!m) return null;
+    let h = parseInt(m[1]);
+    const min = parseInt(m[2]);
+    const ap = (m[3] || '').toUpperCase();
+    if (ap === 'PM' && h !== 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return h * 60 + min;
+  };
+  const o = toMins(openStr), c = toMins(closeStr);
+  if (o === null || c === null) return 0;
+  const diff = c < o ? (c + 1440) - o : c - o; // handle midnight crossing
+  return Math.round(diff / 60);
+}
+
+function saveAndReturn() {
+  if (!window._quoteData) { calc(); }
+  const d = window._quoteData;
+  if (!d) { alert('Generate a quote first.'); return; }
+
+  const raw = sessionStorage.getItem('170e_prefill');
+  if (!raw) { window.location.href = 'index.html'; return; }
+  const { rowIndex, refId } = JSON.parse(raw);
+
+  sessionStorage.setItem('170e_quote_result', JSON.stringify({
+    rowIndex,
+    refId,
+    grandTotal: Math.round(d.grandTotal || 0),
+    quoteDataJson: JSON.stringify(d),
+  }));
+
+  window.location.href = 'index.html';
+}
+</script>
+</body>
+</html>

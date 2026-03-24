@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>170 Eldridge — Contract Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0f0f12;
+    --ink2: #2a2a35;
+    --muted: #6b6b7e;
+    --border: #e2e2ea;
+    --bg: #f8f8fb;
+    --card: #ffffff;
+    --accent: #1a1a2e;
+    --accent2: #0f3460;
+    --gold: #c9a84c;
+    --success: #2d7a4f;
+    --error: #c0392b;
+  }
+
+  html { font-size: 15px; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── HEADER ── */
+  .site-header {
+    background: var(--accent);
+    padding: 28px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .site-header .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.25rem;
+    color: #fff;
+    letter-spacing: 0.04em;
+  }
+  .site-header .logo span {
+    color: var(--gold);
+  }
+  .site-header .subtitle {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
+  .header-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,0.35);
+    padding: 5px 12px;
+    border-radius: 2px;
+  }
+
+  /* ── LAYOUT ── */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 32px;
+    align-items: start;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .card-header h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.15rem;
+    color: var(--ink);
+    font-weight: 400;
+  }
+  .card-header .section-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    padding: 2px 7px;
+    background: rgba(201,168,76,0.08);
+    border-radius: 2px;
+  }
+  .card-body { padding: 24px 28px; }
+
+  /* ── FORM ELEMENTS ── */
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 20px;
+  }
+  .field-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .field-grid.cols-1 { grid-template-columns: 1fr; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.span2 { grid-column: span 2; }
+  .field.span3 { grid-column: span 3; }
+
+  label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  label .req { color: var(--gold); margin-left: 2px; }
+
+  input, select, textarea {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 9px 12px;
+    width: 100%;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+    appearance: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 3px rgba(15,52,96,0.08);
+    background: #fff;
+  }
+  input.error, select.error { border-color: var(--error); }
+  textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b7e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+    cursor: pointer;
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 24px 0;
+  }
+
+  /* ── SECTION SPACER ── */
+  .section-gap { margin-top: 20px; }
+
+  /* ── TOGGLE ── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-label { font-size: 0.88rem; color: var(--ink2); }
+  .toggle-sub { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  .toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-slider::after {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    top: 3px; left: 3px;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent2); }
+  .toggle input:checked + .toggle-slider::after { transform: translateX(18px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+  .summary-card {
+    background: var(--accent);
+    border-radius: 4px;
+    padding: 24px;
+    color: #fff;
+  }
+  .summary-card h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem;
+    font-weight: 400;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 16px;
+    letter-spacing: 0.02em;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.85rem;
+  }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-row .s-label { color: rgba(255,255,255,0.5); font-size: 0.78rem; }
+  .summary-row .s-value { color: #fff; font-family: 'DM Mono', monospace; font-size: 0.82rem; }
+  .summary-total {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .summary-total .t-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--gold);
+  }
+  .summary-total .t-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.5rem;
+    color: #fff;
+  }
+
+  /* ── GENERATE BUTTON ── */
+  .btn-generate {
+    width: 100%;
+    padding: 15px 24px;
+    background: var(--gold);
+    color: var(--accent);
+    border: none;
+    border-radius: 3px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-generate:hover { background: #d4b057; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(201,168,76,0.3); }
+  .btn-generate:active { transform: translateY(0); }
+  .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-generate svg { width: 15px; height: 15px; }
+
+  /* ── STATUS / TOAST ── */
+  .status-box {
+    border-radius: 3px;
+    padding: 12px 16px;
+    font-size: 0.82rem;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-box.show { display: flex; }
+  .status-box.success { background: rgba(45,122,79,0.1); color: var(--success); border: 1px solid rgba(45,122,79,0.2); }
+  .status-box.error { background: rgba(192,57,43,0.08); color: var(--error); border: 1px solid rgba(192,57,43,0.2); }
+  .status-box.loading { background: rgba(15,52,96,0.06); color: var(--accent2); border: 1px solid rgba(15,52,96,0.15); }
+
+  /* ── NOTES CARD ── */
+  .notes-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+  }
+  .notes-card h4 {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .notes-card ul { list-style: none; }
+  .notes-card li {
+    font-size: 0.8rem;
+    color: var(--muted);
+    padding: 4px 0;
+    padding-left: 14px;
+    position: relative;
+    line-height: 1.5;
+  }
+  .notes-card li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: var(--gold);
+    font-size: 0.7rem;
+  }
+
+  /* ── SPINNER ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(15,52,96,0.2);
+    border-top-color: var(--accent2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 800px) {
+    .container { grid-template-columns: 1fr; padding: 24px 16px 60px; }
+    .site-header { padding: 20px 20px; }
+    .field-grid { grid-template-columns: 1fr 1fr; }
+    .field-grid.cols-3 { grid-template-columns: 1fr 1fr; }
+    .field.span3 { grid-column: span 2; }
+    .sidebar { order: -1; }
+  }
+  @media (max-width: 500px) {
+    .field-grid, .field-grid.cols-3 { grid-template-columns: 1fr; }
+    .field.span2, .field.span3 { grid-column: span 1; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div>
+    <div class="logo">170 <span>Eldridge</span> LLC</div>
+    <div class="subtitle">Venue Rental Agreement Generator</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button id="back-btn-c" onclick="window.location.href='index.html'" style="display:none;font-family:'DM Sans',sans-serif;font-size:.78rem;padding:6px 13px;border-radius:4px;border:1px solid rgba(255,255,255,.18);background:transparent;color:rgba(255,255,255,.7);cursor:pointer">← Hub</button>
+    <div class="header-badge">Confidential</div>
+  </div>
+</header>
+
+<!-- Pre-fill banner (shown when opened from hub) -->
+<div id="prefill-banner-c" style="display:none;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 32px;align-items:center;justify-content:space-between;font-size:.8rem;gap:12px">
+  <div style="display:flex;align-items:center;gap:10px;color:#1e40af">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#1e40af" stroke-width="1.3"/><path d="M4.5 7l2 2 3-3.5" stroke="#1e40af" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Pre-filled from inquiry <strong id="prefill-ref-c"></strong> — <span id="prefill-name-c" style="font-style:italic"></span>. Review every field before generating.</span>
+  </div>
+  <button onclick="document.getElementById('prefill-banner-c').style.display='none'" style="background:transparent;border:none;color:#1e40af;cursor:pointer;font-size:16px;line-height:1">×</button>
+</div>
+
+<div class="container">
+  <!-- ── MAIN FORM ── -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+
+    <!-- CLIENT INFO -->
+    <div class="card">
+      <div class="card-header">
+        <span class="section-num">01</span>
+        <h2>Client Information</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-grid">
+          <div class="field span2">
+            <label>Client Name(s) <span class="req">*</span></label>
+            <input type="text" id="clientNames" placeholder="e.g. Adam Silverman & Gabriel Dali" />
+            <div class="field-hint">Full legal name(s) — will appear as jointly and severally liable</div>
+          </div>
+          <div class="field span2">
+            <label>Client Address</label>
+            <input type="text" id="clientAddress" placeholder="Street address, City, State, ZIP" />
+          </div>
+          <div class="field">
+            <label>Client Email</label>
+            <input type="email" id="clientEmail" placeholder="client@email.com" />
+          </div>
+          <div class="field">
+            <label>Client Phone</label>
+            <input type="tel" id="clientPhone" placeholder="+1 (212) 000-0000" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EVENT DETAILS -->
+    <div class="card">
+      <div class="card-header">
+        <span class="section-num">02</span>
+        <h2>Event Details</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-grid">
+          <div class="field">
+            <label>Event / Agreement Date <span class="req">*</span></label>
+            <input type="date" id="agreementDate" />
+          </div>
+          <div class="field">
+            <label>Event Name / Description</label>
+            <input type="text" id="eventDescription" placeholder="e.g. Private party" value="Private party" />
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="margin-bottom:10px;font-family:'DM Mono',monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);">Client Access Window</div>
+        <div class="field-grid cols-3">
+          <div class="field">
+            <label>Access Start Date <span class="req">*</span></label>
+            <input type="date" id="accessStartDate" />
+          </div>
+          <div class="field">
+            <label>Access Start Time <span class="req">*</span></label>
+            <input type="time" id="accessStartTime" value="23:00" />
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <input type="text" value="(Client & crew access begins)" style="color:var(--muted);font-size:0.8rem;" readonly />
+          </div>
+
+          <div class="field">
+            <label>Access End Date <span class="req">*</span></label>
+            <input type="date" id="accessEndDate" />
+          </div>
+          <div class="field">
+            <label>Access End Time <span class="req">*</span></label>
+            <input type="time" id="accessEndTime" value="11:00" />
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <input type="text" value="(Full vacate by this time)" style="color:var(--muted);font-size:0.8rem;" readonly />
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="margin-bottom:10px;font-family:'DM Mono',monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);">Guest Admission Window</div>
+        <div class="field-grid cols-3">
+          <div class="field">
+            <label>Doors Open Date <span class="req">*</span></label>
+            <input type="date" id="doorsOpenDate" />
+          </div>
+          <div class="field">
+            <label>Doors Open Time <span class="req">*</span></label>
+            <input type="time" id="doorsOpenTime" value="03:00" />
+          </div>
+          <div class="field">
+            <label>Max Guests <span class="req">*</span></label>
+            <input type="number" id="maxGuests" value="150" min="1" max="500" />
+          </div>
+
+          <div class="field">
+            <label>Doors Close Date <span class="req">*</span></label>
+            <input type="date" id="doorsCloseDate" />
+          </div>
+          <div class="field">
+            <label>Doors Close Time <span class="req">*</span></label>
+            <input type="time" id="doorsCloseTime" value="10:00" />
+          </div>
+          <div class="field">
+            <label>Max Rooftop Guests</label>
+            <input type="number" id="maxRooftop" value="6" min="0" max="50" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FINANCIALS -->
+    <div class="card">
+      <div class="card-header">
+        <span class="section-num">03</span>
+        <h2>Fees & Payment</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-grid">
+          <div class="field">
+            <label>Rental Fee (USD) <span class="req">*</span></label>
+            <input type="number" id="rentalFee" value="10600" min="0" step="100" />
+            <div class="field-hint">Inclusive of staffing, supplies & production</div>
+          </div>
+          <div class="field">
+            <label>Security Deposit (USD) <span class="req">*</span></label>
+            <input type="number" id="securityDeposit" value="3400" min="0" step="100" />
+          </div>
+          <div class="field">
+            <label>Payment Due Date <span class="req">*</span></label>
+            <input type="date" id="paymentDueDate" />
+          </div>
+          <div class="field">
+            <label>Deposit Return By <span class="req">*</span></label>
+            <input type="date" id="depositReturnDate" />
+          </div>
+          <div class="field span2">
+            <label>Payment Method</label>
+            <select id="paymentMethod">
+              <option value="ACH Transfer">ACH Transfer</option>
+              <option value="Wire Transfer">Wire Transfer</option>
+              <option value="Certified Check">Certified Check</option>
+              <option value="Zelle">Zelle</option>
+              <option value="Cash">Cash</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RULES & CONDITIONS -->
+    <div class="card">
+      <div class="card-header">
+        <span class="section-num">04</span>
+        <h2>Rules & Conditions</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-grid">
+          <div class="field">
+            <label>Max Noise Level (dB) <span class="req">*</span></label>
+            <input type="number" id="noiseLimit" value="105" min="60" max="130" />
+            <div class="field-hint">As measured by DJ booth decibel meter</div>
+          </div>
+          <div class="field">
+            <label>Insurance Proof Deadline</label>
+            <input type="date" id="insuranceDeadline" />
+            <div class="field-hint">Client must provide cert of insurance by this date</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Rooftop Access Permitted</div>
+            <div class="toggle-sub">Managed by Venue Staff; max capacity enforced</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="rooftopAllowed" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Smoking Permitted on Rooftop</div>
+            <div class="toggle-sub">All interior smoking strictly prohibited</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="smokingRooftop" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Confidential Address Distribution</div>
+            <div class="toggle-sub">Address shared only with approved guests</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="confAddress" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Client Provides Door Staff</div>
+            <div class="toggle-sub">Subject to override by Venue Staff</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="clientDoorStaff" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label>Additional Notes / Special Conditions</label>
+          <textarea id="additionalNotes" placeholder="Any additional clauses or notes to include at the end of the agreement..."></textarea>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── SIDEBAR ── -->
+  <div class="sidebar">
+
+    <!-- LIVE SUMMARY -->
+    <div class="summary-card">
+      <h3>Contract Summary</h3>
+      <div class="summary-row">
+        <span class="s-label">Client</span>
+        <span class="s-value" id="sum-client">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="s-label">Access From</span>
+        <span class="s-value" id="sum-access">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="s-label">Guests Open</span>
+        <span class="s-value" id="sum-doors">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="s-label">Max Guests</span>
+        <span class="s-value" id="sum-guests">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="s-label">Rental Fee</span>
+        <span class="s-value" id="sum-fee">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="s-label">Deposit</span>
+        <span class="s-value" id="sum-dep">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="s-label">Payment</span>
+        <span class="s-value" id="sum-pay">—</span>
+      </div>
+      <div class="summary-total">
+        <span class="t-label">Total Due</span>
+        <span class="t-value" id="sum-total">$0</span>
+      </div>
+    </div>
+
+    <!-- GENERATE -->
+    <button class="btn-generate" id="generateBtn" onclick="generateContract()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14,2 14,8 20,8"/>
+        <line x1="12" y1="18" x2="12" y2="12"/>
+        <line x1="9" y1="15" x2="15" y2="15"/>
+      </svg>
+      Generate Contract (.docx)
+    </button>
+
+    <button id="mark-contracted-btn" onclick="markContractedAndReturn()" style="display:none;width:100%;margin-top:8px;padding:11px 16px;border-radius:6px;border:none;background:#1a6b42;color:#fff;font-family:'DM Sans',sans-serif;font-size:.85rem;font-weight:500;cursor:pointer;display:none;align-items:center;justify-content:center;gap:8px">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5l3 3 6-6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Mark as Contracted &amp; return to Hub
+    </button>
+
+    <div class="status-box" id="statusBox"></div>
+
+    <!-- NOTES -->
+    <div class="notes-card">
+      <h4>Template Defaults</h4>
+      <ul>
+        <li>Venue: 170 Eldridge St, NY 10002</li>
+        <li>2nd floor (no bedrooms) + 3rd floor access</li>
+        <li>Doors/windows must stay closed during event</li>
+        <li>Sidewalk to remain clear at all times</li>
+        <li>NY state law & courts govern all disputes</li>
+        <li>17 standard clauses including force majeure</li>
+        <li>Review with counsel before execution</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+
+function fmtMoney(n) {
+  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '________________________________';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function fmtShortDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtTime(timeStr) {
+  if (!timeStr) return '—';
+  const [h, m] = timeStr.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = ((h % 12) || 12);
+  return `${h12}:${m.toString().padStart(2,'0')} ${suffix}`;
+}
+
+function getVal(id) { return document.getElementById(id)?.value?.trim() || ''; }
+function getChecked(id) { return document.getElementById(id)?.checked; }
+
+// ── LIVE SUMMARY UPDATE ───────────────────────────────────────────────────────
+
+function updateSummary() {
+  const client = getVal('clientNames');
+  const fee = parseFloat(getVal('rentalFee')) || 0;
+  const dep = parseFloat(getVal('securityDeposit')) || 0;
+  const guests = getVal('maxGuests');
+  const accessDate = getVal('accessStartDate');
+  const accessTime = getVal('accessStartTime');
+  const doorsDate = getVal('doorsOpenDate');
+  const doorsTime = getVal('doorsOpenTime');
+  const pm = getVal('paymentMethod');
+
+  document.getElementById('sum-client').textContent = client ? (client.length > 20 ? client.slice(0,18)+'…' : client) : '—';
+  document.getElementById('sum-access').textContent = accessDate ? fmtShortDate(accessDate) + ' ' + fmtTime(accessTime) : '—';
+  document.getElementById('sum-doors').textContent = doorsDate ? fmtShortDate(doorsDate) + ' ' + fmtTime(doorsTime) : '—';
+  document.getElementById('sum-guests').textContent = guests ? guests + ' persons' : '—';
+  document.getElementById('sum-fee').textContent = fee ? fmtMoney(fee) : '—';
+  document.getElementById('sum-dep').textContent = dep ? fmtMoney(dep) : '—';
+  document.getElementById('sum-pay').textContent = pm || '—';
+  document.getElementById('sum-total').textContent = (fee || dep) ? fmtMoney(fee + dep) : '$0';
+}
+
+document.querySelectorAll('input, select, textarea').forEach(el => {
+  el.addEventListener('input', updateSummary);
+  el.addEventListener('change', updateSummary);
+});
+updateSummary();
+
+// ── STATUS BOX ───────────────────────────────────────────────────────────────
+
+function setStatus(type, html) {
+  const box = document.getElementById('statusBox');
+  box.className = 'status-box show ' + type;
+  if (type === 'loading') {
+    box.innerHTML = '<div class="spinner"></div>' + html;
+  } else {
+    const icon = type === 'success' ? '✓' : '✕';
+    box.innerHTML = `<span>${icon}</span><span>${html}</span>`;
+  }
+}
+function clearStatus() {
+  document.getElementById('statusBox').className = 'status-box';
+}
+
+// ── VALIDATION ───────────────────────────────────────────────────────────────
+
+function validate() {
+  const required = ['clientNames','accessStartDate','accessStartTime','accessEndDate','accessEndTime',
+    'doorsOpenDate','doorsOpenTime','doorsCloseDate','doorsCloseTime','maxGuests','rentalFee','securityDeposit','paymentDueDate','depositReturnDate'];
+  let ok = true;
+  required.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || !el.value.trim()) {
+      el && el.classList.add('error');
+      ok = false;
+    } else {
+      el && el.classList.remove('error');
+    }
+  });
+  return ok;
+}
+
+// ── CONTRACT GENERATION ───────────────────────────────────────────────────────
+
+async function generateContract() {
+  clearStatus();
+  if (!validate()) {
+    setStatus('error', 'Please fill in all required fields (highlighted in red).');
+    return;
+  }
+
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  setStatus('loading', 'Building contract…');
+
+  try {
+    // ── Gather fields ──
+    const clientNames = getVal('clientNames');
+    const clientAddress = getVal('clientAddress');
+    const agreementDate = getVal('agreementDate');
+    const eventDesc = getVal('eventDescription') || 'Private party';
+    const accessStartDate = getVal('accessStartDate');
+    const accessStartTime = getVal('accessStartTime');
+    const accessEndDate = getVal('accessEndDate');
+    const accessEndTime = getVal('accessEndTime');
+    const doorsOpenDate = getVal('doorsOpenDate');
+    const doorsOpenTime = getVal('doorsOpenTime');
+    const doorsCloseDate = getVal('doorsCloseDate');
+    const doorsCloseTime = getVal('doorsCloseTime');
+    const maxGuests = getVal('maxGuests');
+    const maxRooftop = getVal('maxRooftop') || '6';
+    const rentalFee = parseFloat(getVal('rentalFee'));
+    const secDep = parseFloat(getVal('securityDeposit'));
+    const total = rentalFee + secDep;
+    const payDue = getVal('paymentDueDate');
+    const depReturn = getVal('depositReturnDate');
+    const payMethod = getVal('paymentMethod');
+    const noiseLimit = getVal('noiseLimit') || '105';
+    const insuranceDeadline = getVal('insuranceDeadline');
+    const rooftopAllowed = getChecked('rooftopAllowed');
+    const smokingRooftop = getChecked('smokingRooftop');
+    const confAddress = getChecked('confAddress');
+    const clientDoorStaff = getChecked('clientDoorStaff');
+    const additionalNotes = getVal('additionalNotes');
+
+    const accessStartFull = `${fmtTime(accessStartTime)}, ${fmtDate(accessStartDate)}`;
+    const accessEndFull   = `${fmtTime(accessEndTime)}, ${fmtDate(accessEndDate)}`;
+    const doorsOpenFull   = `${fmtTime(doorsOpenTime)}, ${fmtDate(doorsOpenDate)}`;
+    const doorsCloseFull  = `${fmtTime(doorsCloseTime)}, ${fmtDate(doorsCloseDate)}`;
+    const eventDateRange  = accessStartDate === accessEndDate
+      ? fmtDate(accessStartDate)
+      : `${fmtDate(accessStartDate)} – ${fmtDate(accessEndDate)}`;
+
+    // ── docx helpers ──
+    const {
+      Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+      AlignmentType, BorderStyle, WidthType, ShadingType, HeadingLevel,
+      LevelFormat, Header, Footer, PageNumber, TabStopType, TabStopPosition
+    } = docx;
+
+    const DARK   = "1A1A2E";
+    const ACCENT = "0F3460";
+    const LIGHT  = "4A4A6A";
+    const GREY   = "888888";
+
+    const thinB = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
+    const allB  = { top: thinB, bottom: thinB, left: thinB, right: thinB };
+    const noB   = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+    const noAll = { top: noB, bottom: noB, left: noB, right: noB };
+
+    function rule(color = "DDDDDD", thickness = 4) {
+      return new Paragraph({ spacing: { before: 200, after: 200 },
+        border: { bottom: { style: BorderStyle.SINGLE, size: thickness, color, space: 1 } }, children: [] });
+    }
+    function sp(before = 120, after = 120) {
+      return new Paragraph({ spacing: { before, after }, children: [] });
+    }
+    function sec(num, text) {
+      return new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 280, after: 100 }, children: [
+        new TextRun({ text: num ? `${num}.  ` : '', font: "Arial", size: 24, bold: true, color: ACCENT }),
+        new TextRun({ text: text.toUpperCase(), font: "Arial", size: 24, bold: true, color: DARK })
+      ]});
+    }
+    const B = (t, c=DARK) => new TextRun({ text: t, font:"Arial", size:21, bold:true, color:c });
+    const R = (t, c=DARK) => new TextRun({ text: t, font:"Arial", size:21, color:c });
+    const I = (t, c=LIGHT) => new TextRun({ text: t, font:"Arial", size:20, italics:true, color:c });
+
+    function para(runs, opts={}) {
+      const children = typeof runs === 'string' ? [R(runs)] : runs;
+      return new Paragraph({ spacing: { before: opts.before??80, after: opts.after??80 },
+        alignment: opts.align||AlignmentType.LEFT, children });
+    }
+    function bul(text) {
+      return new Paragraph({ numbering: { reference:"bullets", level:0 }, spacing:{before:60,after:60},
+        children:[new TextRun({text, font:"Arial", size:21, color:DARK})] });
+    }
+    function infoTable(rows) {
+      return new Table({ width:{size:9360,type:WidthType.DXA}, columnWidths:[2800,6560],
+        rows: rows.map(([lbl,val]) => new TableRow({ children:[
+          new TableCell({ borders:allB, width:{size:2800,type:WidthType.DXA},
+            shading:{fill:"F0F2F8",type:ShadingType.CLEAR}, margins:{top:80,bottom:80,left:140,right:140},
+            children:[new Paragraph({children:[B(lbl)]})] }),
+          new TableCell({ borders:allB, width:{size:6560,type:WidthType.DXA},
+            margins:{top:80,bottom:80,left:140,right:140},
+            children:[new Paragraph({children:[R(val)]})] })
+        ]}))
+      });
+    }
+    function defRow(term, def) {
+      return new TableRow({ children:[
+        new TableCell({ borders:noAll, width:{size:2200,type:WidthType.DXA}, margins:{top:80,bottom:80,left:0,right:200}, children:[new Paragraph({children:[B(term)]})] }),
+        new TableCell({ borders:noAll, width:{size:7160,type:WidthType.DXA}, margins:{top:80,bottom:80,left:0,right:0}, children:[new Paragraph({children:[R(def)]})] })
+      ]});
+    }
+    function sigBlock(party, name, title='') {
+      return [
+        new Paragraph({ spacing:{before:60,after:60}, children:[B(party)] }),
+        new Paragraph({ spacing:{before:280,after:0}, border:{bottom:{style:BorderStyle.SINGLE,size:2,color:"555555",space:1}}, children:[R('')] }),
+        new Paragraph({ spacing:{before:60,after:4}, children:[I('Signature')] }),
+        new Paragraph({ spacing:{before:160,after:0}, border:{bottom:{style:BorderStyle.SINGLE,size:2,color:"555555",space:1}}, children:[R(name)] }),
+        new Paragraph({ spacing:{before:60,after:4}, children:[I('Printed Name')] }),
+        ...(title ? [
+          new Paragraph({ spacing:{before:160,after:0}, border:{bottom:{style:BorderStyle.SINGLE,size:2,color:"555555",space:1}}, children:[R(title)] }),
+          new Paragraph({ spacing:{before:60,after:4}, children:[I('Title / Capacity')] })
+        ] : []),
+        new Paragraph({ spacing:{before:160,after:0}, border:{bottom:{style:BorderStyle.SINGLE,size:2,color:"555555",space:1}}, children:[R('')] }),
+        new Paragraph({ spacing:{before:60,after:60}, children:[I('Date')] }),
+      ];
+    }
+
+    // ── Payment table ──
+    function payTable() {
+      const hdr = (t, align=AlignmentType.LEFT) => new Paragraph({ alignment:align, children:[new TextRun({text:t, font:"Arial", size:21, bold:true, color:"FFFFFF"})] });
+      const row = (d, a, shade="FFFFFF") => new TableRow({ children:[
+        new TableCell({ borders:allB, width:{size:6000,type:WidthType.DXA}, shading:{fill:shade,type:ShadingType.CLEAR}, margins:{top:80,bottom:80,left:140,right:140}, children:[new Paragraph({children:[R(d)]})] }),
+        new TableCell({ borders:allB, width:{size:3360,type:WidthType.DXA}, shading:{fill:shade,type:ShadingType.CLEAR}, margins:{top:80,bottom:80,left:140,right:140}, children:[new Paragraph({alignment:AlignmentType.RIGHT, children:[R(a)]})] })
+      ]});
+      return new Table({ width:{size:9360,type:WidthType.DXA}, columnWidths:[6000,3360],
+        rows:[
+          new TableRow({ children:[
+            new TableCell({ borders:allB, width:{size:6000,type:WidthType.DXA}, shading:{fill:"1A1A2E",type:ShadingType.CLEAR}, margins:{top:100,bottom:100,left:140,right:140}, children:[hdr("Description")] }),
+            new TableCell({ borders:allB, width:{size:3360,type:WidthType.DXA}, shading:{fill:"1A1A2E",type:ShadingType.CLEAR}, margins:{top:100,bottom:100,left:140,right:140}, children:[hdr("Amount",AlignmentType.RIGHT)] })
+          ]}),
+          row("Rental Fee (inclusive of staffing, supplies & production)", fmtMoney(rentalFee), "FAFAFA"),
+          row("Refundable Security Deposit", fmtMoney(secDep), "FFFFFF"),
+          new TableRow({ children:[
+            new TableCell({ borders:allB, width:{size:6000,type:WidthType.DXA}, shading:{fill:"E8EAF2",type:ShadingType.CLEAR}, margins:{top:100,bottom:100,left:140,right:140}, children:[new Paragraph({children:[B(`TOTAL DUE BY ${fmtDate(payDue).toUpperCase()}`)]})]}),
+            new TableCell({ borders:allB, width:{size:3360,type:WidthType.DXA}, shading:{fill:"E8EAF2",type:ShadingType.CLEAR}, margins:{top:100,bottom:100,left:140,right:140}, children:[new Paragraph({alignment:AlignmentType.RIGHT, children:[B(fmtMoney(total))]})]})
+          ]})
+        ]
+      });
+    }
+
+    // ── Build children array ──
+    const children = [
+      sp(80,80),
+      new Paragraph({ alignment:AlignmentType.LEFT, spacing:{before:0,after:60},
+        children:[new TextRun({text:"170 ELDRIDGE LLC", font:"Arial", size:20, bold:true, color:ACCENT})] }),
+      new Paragraph({ alignment:AlignmentType.LEFT, spacing:{before:0,after:40},
+        children:[new TextRun({text:"VENUE RENTAL AGREEMENT", font:"Arial", size:44, bold:true, color:DARK})] }),
+      new Paragraph({ alignment:AlignmentType.LEFT, spacing:{before:0,after:240},
+        children:[new TextRun({text:`170 Eldridge Street  ·  New York, NY  ·  ${eventDateRange}`, font:"Arial", size:22, color:LIGHT, italics:true})] }),
+      rule("1A1A2E", 8),
+      sp(200,80),
+      infoTable([
+        ["VENUE / LICENSOR", "170 Eldridge LLC"],
+        ["CLIENT(S)", `${clientNames} (jointly and severally, "the Client")`],
+        ["PROPERTY", `170 Eldridge Street, New York, NY 10002 ("the Venue")`],
+        ["EVENT DATE", eventDateRange],
+        ["AGREEMENT DATE", agreementDate ? fmtDate(agreementDate) : "________________________________"]
+      ]),
+
+      // §1 Definitions
+      sec("1","Definitions"),
+      para("As used in this Agreement, the following terms shall have the meanings set forth below:"),
+      sp(60,40),
+      new Table({ width:{size:9360,type:WidthType.DXA}, columnWidths:[2200,7160], rows:[
+        defRow('"the Venue"', '170 Eldridge Street, New York, NY 10002, including all permitted areas described herein.'),
+        defRow('"the Licensor"', '170 Eldridge LLC, the owner and operator of the Venue.'),
+        defRow('"the Client"', `${clientNames}, jointly and severally responsible for all obligations under this Agreement.`),
+        defRow('"the Party"', `The private event to be held at the Venue on ${fmtDate(doorsOpenDate)}, with a maximum of ${maxGuests} guests.`),
+        defRow('"Rental Fee"', `${fmtMoney(rentalFee)}, inclusive of venue staffing, supplies, and all production costs as specified in the Licensor's quote.`),
+        defRow('"Security Deposit"', `${fmtMoney(secDep)}, held by the Licensor as security against damages and unexpected costs.`),
+        defRow('"Venue Staff"', 'All employees, contractors, and security personnel engaged by 170 Eldridge LLC in connection with this event.'),
+        defRow('"Door Staff"', 'Personnel engaged by the Client to manage guest entry at the Venue.')
+      ]}),
+
+      // §2 Grant of License
+      sec("2","Grant of License"),
+      para("The Licensor grants the Client a limited, non-exclusive, non-transferable license to use the Venue solely for the purposes of hosting the Party, subject to the terms and conditions of this Agreement. This Agreement confers a license only and does not create a tenancy, leasehold, or any other interest in real property. The Licensor retains full control of the Venue at all times."),
+
+      // §3 Rental Period
+      sec("3","Rental Period & Access"),
+      sp(60,40),
+      infoTable([
+        ["Client Access From",    accessStartFull],
+        ["Client Access Until",   accessEndFull],
+        ["Guest Admission Opens", doorsOpenFull],
+        ["Guest Admission Closes",doorsCloseFull],
+        ["Maximum Guest Capacity",`${maxGuests} persons`]
+      ]),
+      sp(100,60),
+      para(`The Client shall vacate the Venue, and ensure all guests have vacated, no later than ${fmtTime(accessEndTime)} on ${fmtDate(accessEndDate)}. Failure to vacate by this time may result in additional charges at the Licensor's then-current hourly rate, and the Licensor reserves the right to arrange removal of persons from the premises at the Client's expense.`),
+
+      // §4 Permitted Areas
+      sec("4","Permitted Areas & Access Restrictions"),
+      para("Guest access is strictly limited to the following areas of the Venue:"),
+      bul("Second Floor: All common areas. Bedrooms and any other private rooms on the second floor are strictly off-limits to all guests at all times."),
+      bul("Third Floor: All areas, subject to any restrictions communicated by Venue Staff."),
+      ...(rooftopAllowed ? [bul(`Rooftop: Access is permitted for a maximum of ${maxRooftop} guests at any one time. Rooftop access shall be managed and enforced exclusively by Venue Staff and security personnel at their sole discretion. The Licensor reserves the right to restrict or revoke rooftop access at any time without notice or explanation.`)] : [
+        bul("Rooftop: Rooftop access is not permitted for guests under this Agreement.")
+      ]),
+      sp(80,40),
+      para("All other areas of the Venue, including but not limited to bedrooms, utility spaces, and staff areas, are strictly prohibited. Venue Staff may deny access to any area without prior notice."),
+
+      // §5 Staffing
+      sec("5","Staffing, Supplies & Production"),
+      para(`The Rental Fee of ${fmtMoney(rentalFee)} is inclusive of all Venue staffing, supplies, and production costs as itemized in the Licensor's quote attached hereto as Exhibit A. The Licensor shall be responsible for providing and managing all included Venue Staff. The Client shall not direct, supervise, or instruct Venue Staff without prior agreement from the Licensor.`),
+      sp(80,40),
+      ...(clientDoorStaff ? [
+        para("The Client shall provide and be solely responsible for all Door Staff engaged to manage guest entry. Door Staff must comply with all applicable laws and regulations and shall operate at the direction of the Client. Notwithstanding the foregoing, Venue Staff and security personnel retain the right, in their sole discretion, to deny entry to or remove any person from the Venue at any time, including persons admitted by Door Staff.")
+      ] : [
+        para("Guest entry management shall be handled exclusively by Venue Staff and security personnel. No separate Door Staff shall be engaged by the Client without prior written consent from the Licensor.")
+      ]),
+
+      // §6 Entry & Guest Management
+      sec("6","Entry, Guest Management & Address Distribution"),
+      ...(confAddress ? [
+        para("The address of the Venue shall be treated as confidential and distributed only to guests who have been expressly approved by the Client. The Client assumes full responsibility for controlling the distribution of the Venue address and for the conduct of all persons to whom the address is disclosed."),
+        sp(80,40),
+      ] : []),
+      ...(clientDoorStaff ? [
+        para("The Client's Door Staff shall have discretion over the admission of guests, subject at all times to the overriding authority of Venue Staff and security. Entry to the Venue may be denied or revoked by Venue Staff or security at any time, without liability to the Licensor. The Client agrees to cooperate fully with Venue Staff in all matters relating to guest management and security."),
+        sp(80,40),
+      ] : []),
+      para("The sidewalk immediately outside the Venue must remain clear of guests and event-related congestion at all times. Venue security shall enforce this requirement. Any queuing of guests must be managed in a manner that does not obstruct the public sidewalk."),
+
+      // §7 Noise
+      sec("7","Noise Restrictions & Standards of Conduct"),
+      para([R("Sound levels within the Venue shall not exceed "), B(`${noiseLimit} decibels (dB)`), R(", as measured by the decibel meter located in the DJ booth. The Client and any audio/production personnel engaged by the Client are responsible for monitoring and maintaining compliance with this limit throughout the event. The Licensor reserves the right to require immediate reduction of sound levels if this threshold is exceeded, and repeated violations may result in termination of the event without refund.")]),
+      sp(80,40),
+      para("All doors and windows providing access to the rooftop, exterior spaces, or the outside of the building must remain closed at all times during the event. This requirement is in place to contain sound within the Venue and to comply with applicable noise ordinances. Venue Staff may enforce this requirement without notice."),
+
+      // §8 Smoking
+      sec("8","Smoking Policy"),
+      para(`Smoking of any kind, including but not limited to cigarettes, cigars, e-cigarettes, and vaping devices, is strictly prohibited inside the Venue and in all interior areas. ${smokingRooftop && rooftopAllowed ? 'Smoking is permitted on the rooftop only, subject to the access restrictions set forth in Section 4.' : 'Smoking is not permitted anywhere on the premises.'} The Client is responsible for communicating this policy to all guests and ensuring compliance.`),
+
+      // §9 Insurance
+      sec("9","Event Insurance"),
+      para([R("Prior to the commencement of the event, the Client shall obtain and maintain, at the Client's sole expense, a comprehensive event liability insurance policy providing coverage for the entirety of "), B(fmtDate(doorsOpenDate)), R(". The policy must provide reasonable coverage for personal injury, property damage, and any other claims or liabilities arising out of or in connection with the Party and must name "), B("170 Eldridge LLC"), R(" as an additional insured. The Client shall provide the Licensor with a certificate of insurance evidencing such coverage no later than "), B(insuranceDeadline ? fmtDate(insuranceDeadline) : fmtDate(payDue)), R(". Failure to obtain and furnish proof of insurance by this date shall constitute a material breach of this Agreement.")]),
+
+      // §10 Fees
+      sec("10","Fees, Payment & Security Deposit"),
+      payTable(),
+      sp(120,60),
+      para([R("All amounts set forth above are due and payable in full no later than "), B(fmtDate(payDue)), R(". Payment shall be made via "), B(payMethod), R(" to the account details provided separately by the Licensor. The Licensor reserves the right to cancel this Agreement and deny access to the Venue if full payment has not been received by the due date.")]),
+      sp(80,60),
+      para([B("Security Deposit: "), R(`The Security Deposit of ${fmtMoney(secDep)} shall be held by the Licensor as security for the performance of the Client's obligations under this Agreement. Subject to any deductions, the Security Deposit shall be returned to the Client no later than `), B(fmtDate(depReturn)), R(". The Licensor may deduct from the Security Deposit the cost of: (i) any damage to the Venue or its contents caused by the Client or their guests; (ii) any additional cleaning required beyond normal post-event standards; and (iii) any other costs or expenses incurred by the Licensor as a result of the Client's breach of this Agreement or any costs beyond those outlined in the original quote. The Licensor shall provide the Client with an itemized statement of any deductions.")]),
+
+      // §11 Damage
+      sec("11","Damage to Property & Client Liability"),
+      para(`The Client shall be jointly and severally liable for any and all damage to the Venue, its fixtures, furniture, equipment, and contents caused by the Client, the Client's guests, Door Staff, or any other persons admitted to the Venue at the Client's direction or as a result of the Client's actions. This liability is not limited to the amount of the Security Deposit; the Client shall be responsible for the full cost of repair or replacement of any damaged property.`),
+      sp(80,60),
+      para("The Client agrees to indemnify, defend, and hold harmless 170 Eldridge LLC and its members, officers, employees, and agents from and against any and all claims, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising out of or relating to the Party, the Client's use of the Venue, or any breach of this Agreement by the Client."),
+
+      // §12 Licensor Rights
+      sec("12","Licensor's Reserved Rights"),
+      para("The Licensor and its Venue Staff reserve the following rights at all times during the rental period:"),
+      bul("To deny entry to or remove any person from the Venue, including guests admitted by Door Staff, at the sole discretion of Venue Staff or security."),
+      bul("To terminate the event immediately if the Client or their guests violate any material term of this Agreement, engage in unlawful conduct, or create a risk to the safety of persons or property."),
+      bul("To restrict access to any area of the Venue at any time without prior notice."),
+      bul("To require immediate compliance with any instruction issued by Venue Staff relating to noise, occupancy, safety, or conduct."),
+      sp(80,60),
+      para("In the event of early termination pursuant to this Section, no refund of the Rental Fee shall be due. The Licensor shall retain the Security Deposit pending assessment of any damages."),
+
+      // §13 Cancellation
+      sec("13","Cancellation"),
+      para("In the event the Client cancels this Agreement:"),
+      bul("Cancellation more than 14 days prior to the event: The Rental Fee shall be refunded in full; the Security Deposit shall be returned."),
+      bul("Cancellation between 7 and 14 days prior to the event: Fifty percent (50%) of the Rental Fee shall be forfeited; the Security Deposit shall be returned."),
+      bul("Cancellation fewer than 7 days prior to the event: The full Rental Fee shall be forfeited; the Security Deposit shall be returned less any costs already incurred by the Licensor."),
+      sp(80,60),
+      para("If the Licensor cancels this Agreement for reasons other than the Client's breach, the Licensor shall refund all amounts paid, including the Security Deposit, within five (5) business days of cancellation."),
+
+      // §14 Force Majeure
+      sec("14","Force Majeure"),
+      para("Neither party shall be in breach of this Agreement or liable for any failure or delay in performance arising from causes beyond that party's reasonable control, including but not limited to acts of God, government action, public health emergency, or civil unrest. In such circumstances, the parties shall negotiate in good faith regarding rescheduling or a fair allocation of costs."),
+
+      // §15 Governing Law
+      sec("15","Governing Law & Dispute Resolution"),
+      para("This Agreement shall be governed by and construed in accordance with the laws of the State of New York, without regard to its conflict of law principles. Any dispute arising out of or in connection with this Agreement shall be subject to the exclusive jurisdiction of the state and federal courts located in New York County, New York."),
+
+      // §16 Entire Agreement
+      sec("16","Entire Agreement & Amendments"),
+      para("This Agreement, together with any exhibits attached hereto, constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior negotiations, representations, or agreements. No amendment or modification of this Agreement shall be effective unless made in writing and signed by authorized representatives of both parties."),
+
+      // §17 Severability
+      sec("17","Severability"),
+      para("If any provision of this Agreement is found to be invalid, illegal, or unenforceable under applicable law, such provision shall be modified to the minimum extent necessary to make it enforceable, and the remaining provisions shall continue in full force and effect."),
+
+      // Additional Notes
+      ...(additionalNotes ? [
+        sec("18","Additional Conditions"),
+        para(additionalNotes)
+      ] : []),
+
+      rule("CCCCCC", 4),
+      sec("","Signatures"),
+      para([I("By signing below, each party acknowledges that they have read, understood, and agree to be bound by the terms of this Agreement.")]),
+      sp(80,80),
+      new Table({ width:{size:9360,type:WidthType.DXA}, columnWidths:[4480,400,4480],
+        rows:[new TableRow({ children:[
+          new TableCell({ borders:noAll, width:{size:4480,type:WidthType.DXA}, children:[...sigBlock("170 ELDRIDGE LLC","","Authorized Signatory")] }),
+          new TableCell({ borders:noAll, width:{size:400,type:WidthType.DXA}, children:[sp()] }),
+          new TableCell({ borders:noAll, width:{size:4480,type:WidthType.DXA}, children:[...sigBlock("CLIENT", clientNames, "")] })
+        ]})]
+      }),
+      rule("CCCCCC",2),
+      sp(80,40),
+      new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:0,after:0},
+        children:[I("This document is confidential. 170 Eldridge Street, New York, NY 10002","AAAAAA")] })
+    ];
+
+    // ── Assemble document ──
+    const document = new Document({
+      styles: {
+        default: { document: { run: { font:"Arial", size:21, color:DARK } } },
+        paragraphStyles: [
+          { id:"Heading1", name:"Heading 1", basedOn:"Normal", next:"Normal", quickFormat:true,
+            run:{size:40,bold:true,font:"Arial",color:DARK},
+            paragraph:{spacing:{before:0,after:160},outlineLevel:0} },
+          { id:"Heading2", name:"Heading 2", basedOn:"Normal", next:"Normal", quickFormat:true,
+            run:{size:24,bold:true,font:"Arial",color:DARK},
+            paragraph:{spacing:{before:280,after:100},outlineLevel:1} }
+        ]
+      },
+      numbering: { config:[{ reference:"bullets", levels:[{
+        level:0, format:LevelFormat.BULLET, text:"\u2013", alignment:AlignmentType.LEFT,
+        style:{paragraph:{indent:{left:560,hanging:280}}}
+      }]}]},
+      sections:[{
+        properties:{ page:{ size:{width:12240,height:15840}, margin:{top:1260,right:1440,bottom:1260,left:1440} } },
+        headers:{ default: new Header({ children:[
+          new Paragraph({ spacing:{before:0,after:160},
+            border:{bottom:{style:BorderStyle.SINGLE,size:3,color:"CCCCCC",space:4}},
+            tabStops:[{type:TabStopType.RIGHT,position:TabStopPosition.MAX}],
+            children:[
+              new TextRun({text:"170 ELDRIDGE LLC  —  VENUE RENTAL AGREEMENT", font:"Arial", size:16, color:GREY}),
+              new TextRun({text:"\tCONFIDENTIAL", font:"Arial", size:16, color:GREY, italics:true})
+            ]})
+        ]})},
+        footers:{ default: new Footer({ children:[
+          new Paragraph({ spacing:{before:160,after:0},
+            border:{top:{style:BorderStyle.SINGLE,size:3,color:"CCCCCC",space:4}},
+            tabStops:[{type:TabStopType.RIGHT,position:TabStopPosition.MAX}],
+            children:[
+              new TextRun({text:"170 Eldridge Street, New York, NY", font:"Arial", size:16, color:GREY}),
+              new TextRun({text:"\tPage ", font:"Arial", size:16, color:GREY}),
+              new TextRun({children:[PageNumber.CURRENT], font:"Arial", size:16, color:GREY})
+            ]})
+        ]})},
+        children
+      }]
+    });
+
+    const blob = await Packer.toBlob(document);
+    const safeName = clientNames.replace(/[^a-zA-Z0-9 ]/g,'').replace(/\s+/g,'_').slice(0,30);
+    saveAs(blob, `170_Eldridge_Rental_Agreement_${safeName}.docx`);
+
+    setStatus('success', 'Contract downloaded successfully!');
+  } catch(err) {
+    console.error(err);
+    setStatus('error', 'Error generating contract: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── HUB INTEGRATION ──────────────────────────────────────────────────────────
+
+(function initContractPrefill() {
+  const raw = sessionStorage.getItem('170e_prefill');
+  if (!raw) return;
+
+  let prefill;
+  try { prefill = JSON.parse(raw); } catch { return; }
+  if (!prefill?.inquiry) return;
+
+  const inq   = prefill.inquiry;
+  const quote = prefill.quote || null;
+
+  // Show hub UI elements
+  const banner = document.getElementById('prefill-banner-c');
+  if (banner) banner.style.display = 'flex';
+  const refEl = document.getElementById('prefill-ref-c');
+  if (refEl) refEl.textContent = inq.refId;
+  const nameEl = document.getElementById('prefill-name-c');
+  if (nameEl) nameEl.textContent = `${inq.firstName} ${inq.lastName}`.trim();
+  const backBtn = document.getElementById('back-btn-c');
+  if (backBtn) backBtn.style.display = '';
+  const markBtn = document.getElementById('mark-contracted-btn');
+  if (markBtn) markBtn.style.display = 'flex';
+
+  // ── Helper: set field value and fire change event ──
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el || val === undefined || val === null || val === '') return;
+    el.value = val;
+    el.dispatchEvent(new Event('input'));
+    el.dispatchEvent(new Event('change'));
+  };
+  const setChk = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.checked = !!val;
+    el.dispatchEvent(new Event('change'));
+  };
+
+  // ── Parse "10:00 PM" → "22:00" for input[type=time] ──
+  const to24 = s => {
+    if (!s) return '';
+    const m = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!m) return '';
+    let h = parseInt(m[1]);
+    const min = m[2];
+    const ap = (m[3] || '').toUpperCase();
+    if (ap === 'PM' && h !== 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return String(h).padStart(2,'0') + ':' + min;
+  };
+
+  // ── Detect if close time is next calendar day ──
+  const crossesMidnight = (openStr, closeStr) => {
+    const toMins = s => {
+      const m = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      if (!m) return null;
+      let h = parseInt(m[1]);
+      if ((m[3]||'').toUpperCase() === 'PM' && h !== 12) h += 12;
+      if ((m[3]||'').toUpperCase() === 'AM' && h === 12) h = 0;
+      return h * 60 + parseInt(m[2]);
+    };
+    const o = toMins(openStr), c = toMins(closeStr);
+    return (o !== null && c !== null && c < o);
+  };
+
+  // ── Compute next calendar date ──
+  const nextDate = dateStr => {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0,10);
+  };
+
+  // ── Client info ──
+  set('clientNames', [inq.firstName, inq.lastName].filter(Boolean).join(' '));
+  set('clientEmail', inq.email);
+  set('clientPhone', inq.phone);
+
+  // ── Event info ──
+  set('eventDescription', inq.eventType || 'Private event');
+
+  // ── Dates & times ──
+  if (inq.eventDate) {
+    const isNextDay = inq.doorsOpen && inq.doorsClose && crossesMidnight(inq.doorsOpen, inq.doorsClose);
+    const closeDate = isNextDay ? nextDate(inq.eventDate) : inq.eventDate;
+
+    set('accessStartDate', inq.eventDate);
+    set('accessEndDate',   closeDate);
+    set('doorsOpenDate',   inq.eventDate);
+    set('doorsCloseDate',  closeDate);
+
+    // Access start time: 1 hr before doors open (for load-in)
+    if (inq.doorsOpen) {
+      const openTime24 = to24(inq.doorsOpen);
+      if (openTime24) {
+        const [h, m] = openTime24.split(':').map(Number);
+        const accessH = ((h - 1) + 24) % 24;
+        set('accessStartTime', String(accessH).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+      }
+    }
+
+    // Access end time: 1 hr after doors close (for clean-up)
+    if (inq.doorsClose) {
+      const closeTime24 = to24(inq.doorsClose);
+      if (closeTime24) {
+        const [h, m] = closeTime24.split(':').map(Number);
+        const endH = (h + 1) % 24;
+        set('accessEndTime', String(endH).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+      }
+    }
+  }
+
+  if (inq.doorsOpen)  set('doorsOpenTime',  to24(inq.doorsOpen));
+  if (inq.doorsClose) set('doorsCloseTime', to24(inq.doorsClose));
+
+  // ── Guests ──
+  if (inq.guestCount) set('maxGuests', inq.guestCount);
+
+  // ── Toggles ──
+  const yes = s => s && s.toLowerCase().startsWith('yes');
+  setChk('rooftopAllowed',  yes(inq.rooftop));
+  setChk('clientDoorStaff', yes(inq.doorStaff));
+  // Confidential address: default on for private/non-public events
+  if (inq.publicEvent) {
+    const isPublic = inq.publicEvent.toLowerCase().startsWith('yes');
+    setChk('confAddress', !isPublic);
+  }
+
+  // ── Payment method ──
+  if (inq.payMethod && inq.payMethod !== 'TBD') {
+    const pmEl = document.getElementById('paymentMethod');
+    if (pmEl) {
+      const opts = Array.from(pmEl.options);
+      const match = opts.find(o => o.value.toLowerCase() === inq.payMethod.toLowerCase());
+      if (match) pmEl.value = match.value;
+    }
+  }
+
+  // ── Notes ──
+  if (inq.notes) set('additionalNotes', inq.notes);
+
+  // ── From quote data ──
+  if (quote) {
+    if (quote.grandTotal)  set('rentalFee', Math.round(quote.grandTotal));
+    if (quote.deposit)     set('securityDeposit', quote.deposit);
+  }
+
+  updateSummary();
+})();
+
+function markContractedAndReturn() {
+  const raw = sessionStorage.getItem('170e_prefill');
+  if (!raw) { window.location.href = 'index.html'; return; }
+  const { rowIndex, refId } = JSON.parse(raw);
+  sessionStorage.setItem('170e_contract_result', JSON.stringify({ rowIndex, refId }));
+  window.location.href = 'index.html';
+}
+</script>
+</body>
+</html>
