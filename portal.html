@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carriage House — Booking Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e0d0a; --surface:#161410; --surface-2:#1d1a14; --surface-3:#232019;
+  --line:#2b271f; --line-2:#3a352a;
+  --ink:#f2ede1; --muted:#9a9080; --muted-2:#6b6353;
+  --amber:#eaa23a; --amber-dim:#a87524; --amber-soft:rgba(234,162,58,.12);
+  --green:#88b46c; --green-soft:rgba(136,180,108,.14);
+  --red:#d3765b; --red-soft:rgba(211,118,91,.14);
+  --blue:#7aa0cf;
+  --display:'Bebas Neue',sans-serif;
+  --mono:'Space Mono',monospace;
+  --body:'Inter',system-ui,sans-serif;
+  --radius:7px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;font-weight:400}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:var(--body);color:var(--ink)}
+a{color:var(--amber)}
+::selection{background:var(--amber);color:#0e0d0a}
+
+/* ---- top bar ---- */
+.topbar{position:sticky;top:0;z-index:40;background:rgba(14,13,10,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar-inner{max-width:1320px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand .mark{font-family:var(--display);font-size:26px;letter-spacing:.06em;color:var(--ink);line-height:1}
+.brand .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;color:var(--muted-2);text-transform:uppercase}
+.ref-chip{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-dim);border-radius:100px;padding:4px 11px;white-space:nowrap}
+.topbar-spacer{flex:1}
+.iobar{display:flex;gap:7px;flex-wrap:wrap}
+.io-btn{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:transparent;border:1px solid var(--line-2);border-radius:5px;padding:7px 11px;transition:.14s}
+.io-btn:hover{color:var(--ink);border-color:var(--muted)}
+.io-btn.danger:hover{color:var(--red);border-color:var(--red)}
+
+/* ---- stage nav ---- */
+.stagenav{max-width:1320px;margin:0 auto;padding:0 22px;display:flex;gap:0;border-bottom:1px solid var(--line)}
+.stage-tab{position:relative;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);background:none;border:none;padding:16px 20px 14px;transition:.14s;display:flex;align-items:center;gap:9px}
+.stage-tab .idx{font-size:10px;color:var(--amber-dim)}
+.stage-tab:hover{color:var(--muted)}
+.stage-tab.active{color:var(--ink)}
+.stage-tab.active::after{content:"";position:absolute;left:20px;right:20px;bottom:-1px;height:2px;background:var(--amber)}
+.stage-tab .flow{color:var(--muted-2);margin:0 2px}
+
+/* ---- layout ---- */
+.stage{display:none;max-width:1320px;margin:0 auto;padding:26px 22px 90px}
+.stage.active{display:block}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:26px;align-items:start}
+@media(max-width:1000px){.split{grid-template-columns:1fr}}
+
+/* ---- panels ---- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.panel-head .slash{font-family:var(--mono);color:var(--amber);font-size:12px}
+.panel-head h3{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink)}
+.panel-head .ph-right{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.panel-body{padding:14px 15px}
+
+/* ---- form fields ---- */
+.field{margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+.field label,.flabel{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.inp,select.inp,textarea.inp{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:5px;padding:8px 10px;font-size:13px;color:var(--ink);transition:.14s}
+.inp:focus{outline:none;border-color:var(--amber-dim);background:#26221a}
+textarea.inp{resize:vertical;min-height:60px;line-height:1.55}
+select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9080' stroke-width='1.3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:28px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.hint{font-family:var(--mono);font-size:10px;color:var(--muted-2);margin-top:4px;letter-spacing:.02em}
+
+/* prefix input (money) */
+.money{position:relative}
+.money::before{content:"$";position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted-2);font-family:var(--mono);font-size:12px}
+.money .inp{padding-left:20px}
+
+/* ---- toggle rows (production items) ---- */
+.togrow{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
+.togrow:last-child{border-bottom:none}
+.sw{position:relative;width:34px;height:19px;flex:none;background:var(--surface-3);border:1px solid var(--line-2);border-radius:100px;transition:.16s;cursor:pointer}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--muted);transition:.16s}
+.sw.on{background:var(--amber-soft);border-color:var(--amber-dim)}
+.sw.on::after{transform:translateX(15px);background:var(--amber)}
+.togrow .tl{flex:1;font-size:13px}
+.togrow .tl small{display:block;font-family:var(--mono);font-size:10px;color:var(--muted-2);letter-spacing:.04em}
+.togrow.off .tl{color:var(--muted-2)}
+.mini-money{width:88px;flex:none}
+
+/* staff role rows */
+.role{display:grid;grid-template-columns:1fr 62px 52px;gap:8px;align-items:end;padding:8px 0;border-bottom:1px solid var(--line)}
+.role:last-child{border-bottom:none}
+.role .rname{font-size:13px}
+.role .rname small{display:block;font-family:var(--mono);font-size:10px;color:var(--muted-2)}
+.role .inp{padding:6px 7px;font-size:12px;text-align:center}
+.role .rlabel{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2);margin-bottom:3px;text-align:center}
+
+/* small add/remove */
+.addbtn{width:100%;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);background:var(--amber-soft);border:1px dashed var(--amber-dim);border-radius:5px;padding:9px;margin-top:10px;transition:.14s}
+.addbtn:hover{background:rgba(234,162,58,.18)}
+.xbtn{background:none;border:none;color:var(--muted-2);font-size:15px;line-height:1;padding:2px 5px;transition:.14s}
+.xbtn:hover{color:var(--red)}
+
+/* ---- the document / summary side ---- */
+.doc{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);position:sticky;top:96px}
+.doc-head{padding:16px 18px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.doc-head .dt{font-family:var(--display);font-size:23px;letter-spacing:.05em;line-height:1}
+.doc-head .dmeta{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-align:right;line-height:1.7}
+.doc-body{padding:6px 18px 16px;max-height:none}
+
+/* line items with dotted leaders */
+.grp{margin-top:16px}
+.grp-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.grp-h .s{font-family:var(--mono);color:var(--amber);font-size:11px}
+.grp-h .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.grp-h .sub{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink)}
+.li{display:flex;align-items:baseline;gap:6px;padding:4px 0;font-size:12.5px}
+.li .ln{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%}
+.li .ln small{color:var(--muted-2);font-family:var(--mono);font-size:10px}
+.li .lead{flex:1;border-bottom:1px dotted var(--line-2);transform:translateY(-3px);min-width:14px}
+.li .lp{font-family:var(--mono);font-size:12px;color:var(--ink);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.li .pedit{width:74px;background:transparent;border:none;border-bottom:1px solid transparent;text-align:right;font-family:var(--mono);font-size:12px;color:var(--ink);padding:1px 2px}
+.li .pedit:hover{border-bottom-color:var(--line-2)}
+.li .pedit:focus{outline:none;border-bottom-color:var(--amber);color:var(--amber)}
+.li.ovr .pedit{color:var(--amber)}
+.li .ovrdot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex:none;opacity:0}
+.li.ovr .ovrdot{opacity:1}
+.li .rst{background:none;border:none;color:var(--muted-2);font-size:11px;padding:0 2px;opacity:0;transition:.12s}
+.li.ovr .rst{opacity:1}
+.li .rst:hover{color:var(--amber)}
+.li.muted .ln{color:var(--muted-2)}
+
+/* totals */
+.totals{margin-top:18px;padding-top:14px;border-top:1px solid var(--line-2)}
+.tl-line{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+.tl-line .k{color:var(--muted)}
+.tl-line .v{font-family:var(--mono);color:var(--ink)}
+.tl-line.disc .v{color:var(--green)}
+.tl-line.add .v{color:var(--red)}
+.tl-line.grand{margin-top:8px;padding-top:10px;border-top:1px solid var(--line-2)}
+.tl-line.grand .k{font-family:var(--display);font-size:19px;letter-spacing:.04em;color:var(--ink)}
+.tl-line.grand .v{font-size:18px;color:var(--amber)}
+.tl-line.sponsor .k,.tl-line.sponsor .v{color:var(--green)}
+.tl-note{font-family:var(--mono);font-size:9.5px;color:var(--muted-2);letter-spacing:.03em;margin-top:3px}
+
+/* deposit schedule mini */
+.sched{margin-top:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:11px 13px}
+.sched-h{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.sched-r{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:12px}
+.sched-r .sk{color:var(--muted)}
+.sched-r .sk b{color:var(--ink);font-weight:500}
+.sched-r .sv{font-family:var(--mono);color:var(--ink)}
+
+/* action row */
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.act{flex:1;min-width:130px;font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;padding:11px 12px;border-radius:6px;border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink);transition:.14s;display:flex;align-items:center;justify-content:center;gap:7px}
+.act:hover{border-color:var(--muted)}
+.act.primary{background:var(--amber);border-color:var(--amber);color:#120f08;font-weight:700}
+.act.primary:hover{background:#f4b04c}
+.act.flow{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--amber)}
+.act.flow:hover{background:rgba(234,162,58,.2)}
+
+/* contract preview */
+.cdoc{background:#faf7ef;color:#1a1a2e;border-radius:var(--radius);padding:34px 38px;font-family:'Inter',system-ui,sans-serif;font-size:12px;line-height:1.62;max-height:74vh;overflow:auto}
+.cdoc h2.ct{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:.03em;color:#0f3460;margin-bottom:2px}
+.cdoc .csub{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6b6b7a;margin-bottom:22px;border-bottom:1px solid #d9d4c6;padding-bottom:14px}
+.cdoc h3.cs{font-size:12.5px;font-weight:600;color:#0f3460;margin:18px 0 6px;letter-spacing:.01em}
+.cdoc h3.cs .n{color:#1a1a2e}
+.cdoc p{margin:0 0 9px}
+.cdoc ul{margin:4px 0 10px;padding-left:20px}
+.cdoc li{margin-bottom:4px}
+.cdoc .ctable{width:100%;border-collapse:collapse;margin:6px 0 12px}
+.cdoc .ctable td{border:1px solid #cfcabb;padding:6px 9px;font-size:11.5px}
+.cdoc .ctable td.k{background:#eef0f6;font-weight:600;width:38%}
+.cdoc b{font-weight:600}
+.cdoc .sig{margin-top:26px;display:grid;grid-template-columns:1fr 1fr;gap:30px}
+.cdoc .sigblock{border-top:1px solid #1a1a2e;padding-top:6px;font-size:10.5px;font-family:'Space Mono',monospace;letter-spacing:.04em}
+
+/* section toggle list (contract controls) */
+.sectog{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.sectog:last-child{border-bottom:none}
+.sectog .st-n{font-family:var(--mono);font-size:10px;color:var(--amber-dim);width:18px}
+.sectog .st-t{flex:1;font-size:12.5px}
+.sectog.off .st-t{color:var(--muted-2)}
+.sectog .sw{width:30px;height:17px}
+.sectog .sw::after{width:11px;height:11px}
+.sectog .sw.on::after{transform:translateX(13px)}
+
+/* invoice specifics */
+.invrow{display:grid;grid-template-columns:1fr 80px 30px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.invrow:last-of-type{border-bottom:none}
+.invrow .inp{padding:6px 8px;font-size:12px}
+.paidtag{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:100px;cursor:pointer;user-select:none}
+.paidtag.paid{background:var(--green-soft);color:var(--green);border:1px solid var(--green)}
+.paidtag.due{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
+
+/* toast */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface-3);border:1px solid var(--line-2);color:var(--ink);font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;padding:11px 18px;border-radius:7px;opacity:0;pointer-events:none;transition:.22s;z-index:100}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* empty state */
+.empty{text-align:center;padding:40px 20px;color:var(--muted-2);font-family:var(--mono);font-size:11px;letter-spacing:.06em;line-height:1.9}
+.empty .big{font-family:var(--display);font-size:34px;color:var(--line-2);letter-spacing:.06em;display:block;margin-bottom:6px}
+
+.presentation .no-present{display:none!important}
+
+/* print */
+@media print{
+  .topbar,.stagenav,.controls-col,.no-print,.actions{display:none!important}
+  body{background:#fff}
+  .stage{padding:0;max-width:none}
+  .stage:not(.active){display:none}
+  .split{display:block}
+  .doc,.cdoc{position:static;border:none;box-shadow:none;max-height:none;border-radius:0}
+  .doc{background:#fff;color:#111}
+  .doc .li .ln,.doc .li .lp,.doc .tl-line .v,.doc .doc-head .dt,.doc .doc-head .dmeta{color:#111}
+  .doc .sched{background:#f4f1ea;border-color:#d9d4c6}
+  .doc .sched .sk,.doc .sched .sk b,.doc .sched .sv,.doc .sched-h{color:#111!important}
+  .doc input,.doc .pedit{color:#111!important;border:none!important;background:transparent!important;-webkit-appearance:none;appearance:none;width:auto;padding:0}
+  .li .rst,.li .ovrdot{display:none!important}
+  .cdoc{padding:0}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="mark">CARRIAGE HOUSE</span>
+      <span class="sub">Booking Portal</span>
+    </div>
+    <span class="ref-chip" id="refChip">CH-0000</span>
+    <div class="topbar-spacer"></div>
+    <div class="iobar">
+      <button class="io-btn" onclick="Portal.newDeal()">New deal</button>
+      <button class="io-btn" onclick="Portal.exportJSON()">Save file</button>
+      <button class="io-btn" onclick="document.getElementById('importFile').click()">Load file</button>
+      <button class="io-btn" id="presentBtn" onclick="Portal.togglePresent()">Present</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none" onchange="Portal.importJSON(event)">
+    </div>
+    <div class="iobar" id="hubbar"></div>
+  </div>
+  <div class="stagenav">
+    <button class="stage-tab active" data-stage="quote" onclick="Portal.go('quote')"><span class="idx">01</span> Quote</button>
+    <button class="stage-tab" data-stage="contract" onclick="Portal.go('contract')"><span class="idx">02</span> Contract</button>
+    <button class="stage-tab" data-stage="invoice" onclick="Portal.go('invoice')"><span class="idx">03</span> Invoice</button>
+  </div>
+</div>
+
+<!-- ===================== QUOTE ===================== -->
+<section class="stage active" id="stage-quote">
+  <div class="split">
+    <div class="controls-col" id="quoteControls"></div>
+    <div class="doc-col"><div class="doc" id="quoteDoc"></div></div>
+  </div>
+</section>
+
+<!-- ===================== CONTRACT ===================== -->
+<section class="stage" id="stage-contract">
+  <div class="split">
+    <div class="controls-col" id="contractControls"></div>
+    <div class="doc-col"><div id="contractDoc"></div></div>
+  </div>
+</section>
+
+<!-- ===================== INVOICE ===================== -->
+<section class="stage" id="stage-invoice">
+  <div class="split">
+    <div class="controls-col" id="invoiceControls"></div>
+    <div class="doc-col"><div class="doc" id="invoiceDoc"></div></div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const Portal = (function(){
+"use strict";
+
+/* ---------------- config ---------------- */
+const TIERS = [
+  {id:'t150', label:'Up to 150 guests', rate:4500},
+  {id:'t250', label:'Up to 250 guests', rate:6500},
+  {id:'t350', label:'Full venue (up to 350)', rate:8500}
+];
+const INCLUDED_HOURS = 6, EXTRA_HOUR_RATE = 400, LOADIN_RATE = 250;
+const PROD_DEFAULTS = [
+  {id:'pa', label:'PA / main speaker system', price:850, on:true},
+  {id:'dj', label:'DJ booth & mixer setup', price:450, on:true},
+  {id:'light', label:'Lighting rig', price:600, on:true},
+  {id:'haze', label:'Haze / atmospherics', price:150, on:false},
+  {id:'screen', label:'Projection & screen', price:400, on:false},
+  {id:'mics', label:'Wireless mic pack', price:200, on:false},
+  {id:'backline', label:'Backline (drums / amps)', price:500, on:false}
+];
+const STAFF_DEFAULTS = [
+  {id:'security', label:'Security', rate:38, count:3},
+  {id:'bar', label:'Bartenders', rate:32, count:2},
+  {id:'door', label:'Door host', rate:30, count:1},
+  {id:'coat', label:'Coat check', rate:28, count:0},
+  {id:'tech', label:'Production / AV tech', rate:30, count:1}
+];
+const SUPPLY_DEFAULTS = [
+  {id:'bar', label:'Bar supplies & consumables', price:600},
+  {id:'decor', label:'Décor', price:0},
+  {id:'misc', label:'Miscellaneous buffer', price:150}
+];
+const SPONSOR_CATS = ['Venue','Equipment','Staff','Supplies','Cleaning','Custom'];
+
+/* ---------------- state ---------------- */
+let S;
+function freshState(){
+  const yr = new Date().getFullYear();
+  const ref = 'CH-'+yr+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+  return {
+    deal:{ ref, created:new Date().toISOString().slice(0,10) },
+    client:{ name:'', company:'', email:'' },
+    event:{ name:'', date:'', guests:150, hours:6, staffHours:7, loadInHours:1 },
+    venue:{ tier:'t150', cleaning:350, customBase:null },
+    sec:{ prod:true, staff:true },
+    prod: PROD_DEFAULTS.map(p=>({...p})),
+    staff: STAFF_DEFAULTS.map(s=>({...s})),
+    supplies: SUPPLY_DEFAULTS.map(s=>({...s})),
+    sponsors: [],
+    adj:{ discount:0, surcharge:0, taxRate:8.875, depositPct:20, depositCredited:true },
+    overrides:{},
+    depositOverride:null,
+    contract:{
+      signDate:new Date().toISOString().slice(0,10),
+      totalOverride:null, depositOverride:null, depositPct:20,
+      licensor:'170 Eldridge LLC',
+      venueAddress:'170 Eldridge Street, New York, NY 10002',
+      accessFrom:'', accessUntil:'', admissionOpen:'', admissionClose:'',
+      vacateTime:'1:00 AM', decibel:'105',
+      insuranceDate:'',
+      installDays:14, balanceLeadDays:14,
+      cancTier1:30, cancTier2:14,
+      residential:{ on:false, checkIn:'', checkOut:'' },
+      governingState:'New York',
+      sections:{
+        definitions:true, grant:true, rental:true, residential:false, areas:true,
+        staffing:true, entry:true, noise:true, smoking:true, insurance:true,
+        fees:true, damage:true, property:true, reserved:true, cancellation:true,
+        force:true, governing:true, entire:true, sever:true
+      }
+    },
+    invoice:{
+      number:'', date:new Date().toISOString().slice(0,10),
+      items:[], payments:[], notes:'', showPayInfo:true, pulled:false
+    },
+    present:false, stage:'quote'
+  };
+}
+
+/* ---------------- helpers ---------------- */
+const $ = id => document.getElementById(id);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt0 = n => '$'+Math.round(n||0).toLocaleString('en-US');
+const fmt2 = n => '$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const num = v => { const n=parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; };
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function parseDate(s){ if(!s) return null; const p=s.split('-'); if(p.length!==3) return null; return new Date(+p[0],+p[1]-1,+p[2]); }
+function longDate(d){ if(!d) return '—'; return DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear(); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function dowInfo(dateStr){
+  const d=parseDate(dateStr);
+  if(!d) return {mult:1.0, label:'weekday'};
+  const g=d.getDay();
+  if(g===5) return {mult:1.25,label:'Friday'};
+  if(g===6) return {mult:1.40,label:'Saturday'};
+  if(g===0) return {mult:1.15,label:'Sunday'};
+  return {mult:1.0,label:DAYS[g]};
+}
+function setPath(path,val){ const parts=path.split('.'); let o=S; for(let i=0;i<parts.length-1;i++) o=o[parts[i]]; o[parts[parts.length-1]]=val; }
+function getPath(path){ const parts=path.split('.'); let o=S; for(const p of parts){ if(o==null) return undefined; o=o[p]; } return o; }
+
+/* ---------------- calc engine ---------------- */
+function computeLines(){
+  const g=[], sub={venue:0,prod:0,staff:0};
+  const tier = TIERS.find(t=>t.id===S.venue.tier)||TIERS[0];
+  const dw = dowInfo(S.event.date);
+  const hrs = num(S.event.hours);
+  const customOn = (S.venue.customBase!=null && S.venue.customBase!=='');
+  let base, baseNote;
+  if(customOn){ base = num(S.venue.customBase); baseNote = 'Custom rental fee'; }
+  else {
+    base = tier.rate*dw.mult;
+    if(hrs>INCLUDED_HOURS) base += (hrs-INCLUDED_HOURS)*EXTRA_HOUR_RATE;
+    baseNote = tier.label+', '+hrs+' hrs, '+dw.label;
+  }
+  const push=(id,cat,label,note,computed,show=true)=>{
+    if(!show) return;
+    const ov = S.overrides[id];
+    const price = (ov!=null && ov!=='')? num(ov): computed;
+    g.push({id,cat,label,note,computed:Math.round(computed),price:Math.round(price),ovr:(ov!=null&&ov!=='')});
+    sub[cat]+=Math.round(price);
+  };
+  push('venue-base','venue','Base rental', baseNote, base);
+  push('venue-loadin','venue','Setup / load-in', num(S.event.loadInHours)+' hrs × $'+LOADIN_RATE, num(S.event.loadInHours)*LOADIN_RATE, num(S.event.loadInHours)>0);
+  push('venue-cleaning','venue','Cleaning fee','', num(S.venue.cleaning), num(S.venue.cleaning)>0);
+  if(S.sec.prod) S.prod.forEach(p=>{ if(p.on) push('prod-'+p.id,'prod',p.label,'', num(p.price)); });
+  const sh=num(S.event.staffHours);
+  if(S.sec.staff){
+    S.staff.forEach(s=>{ push('staff-'+s.id,'staff',s.label, s.count+'×$'+s.rate+'/hr×'+sh+'hr', num(s.rate)*num(s.count)*sh, num(s.count)>0); });
+    S.supplies.forEach(x=>{ push('sup-'+x.id,'staff',x.label,'', num(x.price), num(x.price)>0); });
+  }
+  return {lines:g, sub, dw, tier};
+}
+function quoteTotals(){
+  const {lines,sub,dw,tier}=computeLines();
+  const venueTotal=sub.venue, equipTotal=sub.prod, staffTotal=sub.staff;
+  const pre = venueTotal+equipTotal+staffTotal;
+  const discount=num(S.adj.discount), surcharge=num(S.adj.surcharge);
+  const taxable = Math.max(0, pre - discount + surcharge);
+  const taxRate = num(S.adj.taxRate)/100;
+  const tax = taxable*taxRate;
+  const grand = taxable + tax;
+  let confirmed=0, potential=0;
+  S.sponsors.forEach(sp=>{ const a=num(sp.amount); if(sp.status==='confirmed') confirmed+=a; else potential+=a; });
+  const netConfirmed = Math.max(0, grand-confirmed);
+  const netPotential = Math.max(0, grand-confirmed-potential);
+  const depBase = confirmed>0? netConfirmed : grand;
+  const deposit = (S.depositOverride!=null&&S.depositOverride!=='')? num(S.depositOverride) : Math.round(depBase*num(S.adj.depositPct)/100);
+  return {lines,venueTotal,equipTotal,staffTotal,pre,discount,surcharge,tax,taxRate:num(S.adj.taxRate),grand:Math.round(grand),confirmed,potential,netConfirmed:Math.round(netConfirmed),netPotential:Math.round(netPotential),deposit,dw,tier};
+}
+
+/* ---------------- UI: toast, nav, present ---------------- */
+let toastT;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1700); }
+function go(stage){
+  S.stage=stage;
+  document.querySelectorAll('.stage-tab').forEach(b=>b.classList.toggle('active',b.dataset.stage===stage));
+  document.querySelectorAll('.stage').forEach(s=>s.classList.toggle('active', s.id==='stage-'+stage));
+  if(stage==='contract') renderContract();
+  if(stage==='invoice') renderInvoice();
+  try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){}
+}
+function togglePresent(){
+  S.present=!S.present;
+  document.body.classList.toggle('presentation',S.present);
+  $('presentBtn').textContent = S.present?'Exit present':'Present';
+}
+
+/* ---------------- QUOTE: controls (left) ---------------- */
+function renderQuoteControls(){
+  const c=$('quoteControls');
+  const customOn = (S.venue.customBase!=null && S.venue.customBase!=='');
+  const credited = S.adj.depositCredited!==false;
+  const prodRows = S.prod.map((p,i)=>`
+    <div class="togrow ${p.on?'':'off'}">
+      <div class="sw ${p.on?'on':''}" onclick="Portal.toggleProd(${i})"></div>
+      <div class="tl">${esc(p.label)}<small>default ${fmt0(p.price)}</small></div>
+    </div>`).join('');
+  const staffRows = S.staff.map((s,i)=>`
+    <div class="role">
+      <div class="rname">${esc(s.label)}<small>per hour × count</small></div>
+      <div><div class="rlabel">Rate</div><div class="money"><input class="inp" value="${s.rate}" oninput="Portal.staffEdit(${i},'rate',this.value)"></div></div>
+      <div><div class="rlabel">Qty</div><input class="inp" value="${s.count}" oninput="Portal.staffEdit(${i},'count',this.value)"></div>
+    </div>`).join('');
+  const supplyRows = S.supplies.map((x,i)=>`
+    <div class="field"><label>${esc(x.label)}</label><div class="money"><input class="inp" value="${x.price}" oninput="Portal.supplyEdit(${i},this.value)"></div></div>`).join('');
+  const sponsorRows = S.sponsors.map((sp,i)=>`
+    <div style="border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:9px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input class="inp" placeholder="Sponsor name" value="${esc(sp.name)}" oninput="Portal.sponsorEdit(${i},'name',this.value)">
+        <button class="xbtn" onclick="Portal.sponsorDel(${i})" title="Remove">✕</button>
+      </div>
+      <div class="row3">
+        <div class="money"><input class="inp" value="${sp.amount}" oninput="Portal.sponsorEdit(${i},'amount',this.value)"></div>
+        <select class="inp" onchange="Portal.sponsorEdit(${i},'category',this.value)">${SPONSOR_CATS.map(x=>`<option ${sp.category===x?'selected':''}>${x}</option>`).join('')}</select>
+        <select class="inp" onchange="Portal.sponsorEdit(${i},'status',this.value)"><option value="confirmed" ${sp.status==='confirmed'?'selected':''}>Confirmed</option><option value="potential" ${sp.status==='potential'?'selected':''}>Potential</option></select>
+      </div>
+    </div>`).join('');
+
+  c.innerHTML = `
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Client & Event</h3></div>
+    <div class="panel-body">
+      <div class="row2">
+        <div class="field"><label>Client name</label><input class="inp" value="${esc(S.client.name)}" oninput="Portal.set('client.name',this.value,'quote')"></div>
+        <div class="field"><label>Company</label><input class="inp" value="${esc(S.client.company)}" oninput="Portal.set('client.company',this.value,'quote')"></div>
+      </div>
+      <div class="field"><label>Event name</label><input class="inp" value="${esc(S.event.name)}" oninput="Portal.set('event.name',this.value,'quote')"></div>
+      <div class="row2">
+        <div class="field"><label>Event date</label><input type="date" class="inp" value="${esc(S.event.date)}" oninput="Portal.set('event.date',this.value,'quote')"></div>
+        <div class="field"><label>Guests (planning)</label><input class="inp" value="${S.event.guests}" oninput="Portal.set('event.guests',this.value,'quote')"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Venue Rental</h3>${customOn?'<span class="ph-right" style="color:var(--amber)">custom rate</span>':''}</div>
+    <div class="panel-body">
+      <div class="togrow ${customOn?'':'off'}" style="padding-top:0">
+        <div class="sw ${customOn?'on':''}" onclick="Portal.toggleCustomBase()"></div>
+        <div class="tl">Custom rental fee<small>flat rate — ignores tier, day, and hours</small></div>
+      </div>
+      ${customOn ? `
+      <div class="field" style="margin-top:12px"><label>Custom rental fee</label><div class="money"><input class="inp" value="${S.venue.customBase}" oninput="Portal.setCustomBase(this.value)"></div></div>
+      ` : `
+      <div class="field" style="margin-top:12px"><label>Occupancy tier</label>
+        <select class="inp" onchange="Portal.set('venue.tier',this.value,'quote')">${TIERS.map(t=>`<option value="${t.id}" ${S.venue.tier===t.id?'selected':''}>${t.label} — ${fmt0(t.rate)} base</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Event hours</label><input class="inp" value="${S.event.hours}" oninput="Portal.set('event.hours',this.value,'quote')"></div>
+      `}
+      <div class="row2">
+        <div class="field"><label>Load-in hrs</label><input class="inp" value="${S.event.loadInHours}" oninput="Portal.set('event.loadInHours',this.value,'quote')"></div>
+        <div class="field"><label>Cleaning</label><div class="money"><input class="inp" value="${S.venue.cleaning}" oninput="Portal.set('venue.cleaning',this.value,'quote')"></div></div>
+      </div>
+      <div class="hint">${customOn?'Base rental is set to your custom amount. Load-in and cleaning are added on top.':`Base = tier × day-of-week (${dowInfo(S.event.date).label} ×${dowInfo(S.event.date).mult}). Hours over ${INCLUDED_HOURS} add $${EXTRA_HOUR_RATE}/hr.`} Override any price on the quote →</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Production & Equipment</h3><div class="sw ${S.sec.prod?'on':''}" style="margin-left:auto" onclick="Portal.toggleSec('prod')"></div></div>
+    <div class="panel-body" style="${S.sec.prod?'':'opacity:.38;pointer-events:none'}">${prodRows}</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Staff & Supplies</h3><div class="sw ${S.sec.staff?'on':''}" style="margin-left:auto" onclick="Portal.toggleSec('staff')"></div></div>
+    <div class="panel-body" style="${S.sec.staff?'':'opacity:.38;pointer-events:none'}">
+      <div class="field"><label>Staffed event hours</label><input class="inp" value="${S.event.staffHours}" oninput="Portal.set('event.staffHours',this.value,'quote')"></div>
+      ${staffRows}
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">${supplyRows}</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Sponsorships</h3><span class="ph-right">optional</span></div>
+    <div class="panel-body">
+      ${sponsorRows||'<div class="hint" style="margin-bottom:4px">No sponsors added. Sponsorship offsets net cost and shows confirmed / potential scenarios.</div>'}
+      <button class="addbtn" onclick="Portal.sponsorAdd()">+ Add sponsor</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Adjustments</h3></div>
+    <div class="panel-body">
+      <div class="row2">
+        <div class="field"><label>Discount / credit</label><div class="money"><input class="inp" value="${S.adj.discount}" oninput="Portal.set('adj.discount',this.value,'quote')"></div></div>
+        <div class="field"><label>Additional charge</label><div class="money"><input class="inp" value="${S.adj.surcharge}" oninput="Portal.set('adj.surcharge',this.value,'quote')"></div></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Tax / service %</label><input class="inp" value="${S.adj.taxRate}" oninput="Portal.set('adj.taxRate',this.value,'quote')"></div>
+        <div class="field"><label>Deposit %</label><input class="inp" value="${S.adj.depositPct}" oninput="Portal.set('adj.depositPct',this.value,'quote')"></div>
+      </div>
+      <div class="togrow ${credited?'':'off'}" style="margin-top:2px">
+        <div class="sw ${credited?'on':''}" onclick="Portal.toggleDepCredit()"></div>
+        <div class="tl">Credit deposit to total<small>${credited?'deposit is part of the total':'refundable — held separately, on top of the total'}</small></div>
+      </div>
+      <div class="hint">${credited?'The deposit counts toward the total, so the client\'s total obligation is unchanged. Kept only on damage or violation.':'The deposit is additional to the total and refunded after the event, less any deductions. The client pays the total plus the deposit.'} Edit the deposit amount directly on the quote to override.</div>
+    </div>
+  </div>`;
+}
+
+/* ---------------- QUOTE: document (right) ---------------- */
+function lineRow(l){
+  return `<div class="li ${l.ovr?'ovr':''} ${l.price===0?'muted':''}" data-lid="${l.id}">
+    <span class="ln">${esc(l.label)}${l.note?` <small>${esc(l.note)}</small>`:''}</span>
+    <span class="lead"></span>
+    <span class="lp"><span class="ovrdot"></span><button class="rst no-print" title="Reset to calculated" onclick="Portal.resetLine('${l.id}')">↺</button>$<input class="pedit" value="${l.price.toLocaleString('en-US')}" onfocus="this.select()" oninput="Portal.priceEdit('${l.id}',this.value)"></span>
+  </div>`;
+}
+function renderQuoteDoc(){
+  const t=quoteTotals();
+  const byCat = c => t.lines.filter(l=>l.cat===c);
+  const grp=(slash,title,cat,subv)=>`
+    <div class="grp">
+      <div class="grp-h"><span class="s">${slash}</span><span class="t">${title}</span><span class="sub" id="sub-${cat}">${fmt0(subv)}</span></div>
+      ${byCat(cat).map(lineRow).join('')||'<div class="hint">—</div>'}
+    </div>`;
+  const spons = S.sponsors.length? `
+    <div class="grp">
+      <div class="grp-h"><span class="s" style="color:var(--green)">//</span><span class="t" style="color:var(--green)">Sponsorship</span></div>
+      ${S.sponsors.map(sp=>`<div class="li"><span class="ln">${esc(sp.name||'Sponsor')} <small>${sp.status}</small></span><span class="lead"></span><span class="lp">−${fmt0(num(sp.amount))}</span></div>`).join('')}
+    </div>`:'';
+
+  $('quoteDoc').innerHTML = `
+  <div class="doc-head">
+    <div>
+      <div class="dt">${esc(S.event.name||'Event Quote')}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px">${esc(S.client.name||'—')}${S.client.company?' · '+esc(S.client.company):''}</div>
+    </div>
+    <div class="dmeta">${esc(S.deal.ref)}<br>${S.event.date?longDate(parseDate(S.event.date)):'date TBD'}<br>${S.event.guests||'—'} guests</div>
+  </div>
+  <div class="doc-body">
+    ${grp('//','Venue rental','venue',t.venueTotal)}
+    ${S.sec.prod ? grp('//','Production & equipment','prod',t.equipTotal) : ''}
+    ${S.sec.staff ? grp('//','Staff & supplies','staff',t.staffTotal) : ''}
+    ${spons}
+    <div class="totals" id="q-totals">${quoteTotalsHtml(t)}</div>
+    <div class="actions">
+      <button class="act primary" onclick="Portal.copyQuote()">Copy quote</button>
+      <button class="act no-present" onclick="window.print()">Print / PDF</button>
+      <button class="act flow no-present" onclick="Portal.pushToContract()">Build contract →</button>
+      <button class="act flow no-present" onclick="Portal.pushToInvoice()">Make invoice →</button>
+    </div>
+    <div class="tl-note" style="margin-top:12px">Estimate based on standard 170 Eldridge LLC pricing. Not a binding agreement until countersigned.</div>
+  </div>`;
+}
+function quoteTotalsHtml(t){
+  let h='';
+  h+=`<div class="tl-line"><span class="k">Subtotal</span><span class="v">${fmt0(t.pre)}</span></div>`;
+  if(t.discount>0) h+=`<div class="tl-line disc"><span class="k">Discount / credit</span><span class="v">−${fmt0(t.discount)}</span></div>`;
+  if(t.surcharge>0) h+=`<div class="tl-line add"><span class="k">Additional charge</span><span class="v">+${fmt0(t.surcharge)}</span></div>`;
+  if(t.tax>0) h+=`<div class="tl-line"><span class="k">Tax / service (${t.taxRate}%)</span><span class="v">${fmt0(t.tax)}</span></div>`;
+  h+=`<div class="tl-line grand"><span class="k">Total</span><span class="v">${fmt0(t.grand)}</span></div>`;
+  if(t.confirmed>0){ h+=`<div class="tl-line sponsor"><span class="k">Net (confirmed sponsors)</span><span class="v">${fmt0(t.netConfirmed)}</span></div>`; }
+  if(t.potential>0){ h+=`<div class="tl-line sponsor"><span class="k">Net (all sponsors)</span><span class="v">${fmt0(t.netPotential)}</span></div>`; }
+  // deposit schedule preview
+  const credited = S.adj.depositCredited!==false;
+  const total = t.confirmed>0? t.netConfirmed : t.grand;
+  const dep = t.deposit;
+  const half = Math.round(total/2);
+  const bal = credited ? Math.max(0, total - dep - half) : Math.max(0, total - half);
+  h+=`<div class="sched">
+    <div class="sched-h">Payment schedule (preview)</div>
+    <div class="sched-r"><span class="sk"><b>Security deposit</b> — on signing, ${credited?'credited to total':'refundable / held'} <span style="position:relative;top:0"><input class="pedit" style="width:66px;color:var(--amber)" value="${dep.toLocaleString('en-US')}" oninput="Portal.depEdit(this.value)"></span></span><span class="sv">${fmt0(dep)}</span></div>
+    <div class="sched-r"><span class="sk"><b>Half of total</b> — 14 days after signing</span><span class="sv">${fmt0(half)}</span></div>
+    <div class="sched-r"><span class="sk"><b>Balance</b> — 14 days before event</span><span class="sv">${fmt0(bal)}</span></div>
+    ${credited?'':`<div class="tl-note" style="margin-top:6px">Deposit is additional to the total (client pays ${fmt0(total+dep)}) and refunded after the event.</div>`}
+  </div>`;
+  return h;
+}
+function repaintQuoteTotals(){
+  const t=quoteTotals();
+  const sv=$('sub-venue'), sp=$('sub-prod'), ss=$('sub-staff');
+  if(sv) sv.textContent=fmt0(t.venueTotal);
+  if(sp) sp.textContent=fmt0(t.equipTotal);
+  if(ss) ss.textContent=fmt0(t.staffTotal);
+  $('q-totals').innerHTML=quoteTotalsHtml(t);
+}
+
+/* ---------------- quote setters ---------------- */
+function set(path,val,repaint){ setPath(path,val); if(repaint==='quote') renderQuoteDoc(); }
+function toggleProd(i){ S.prod[i].on=!S.prod[i].on; renderQuoteControls(); renderQuoteDoc(); }
+function staffEdit(i,k,v){ S.staff[i][k]=num(v); renderQuoteDoc(); }
+function supplyEdit(i,v){ S.supplies[i].price=num(v); renderQuoteDoc(); }
+function toggleSec(name){ S.sec[name]=!S.sec[name]; renderQuoteControls(); renderQuoteDoc(); }
+function toggleCustomBase(){
+  if(S.venue.customBase!=null && S.venue.customBase!==''){ S.venue.customBase=null; }
+  else { const c=computeLines().lines.find(l=>l.id==='venue-base'); S.venue.customBase = c? c.computed : 0; }
+  renderQuoteControls(); renderQuoteDoc();
+}
+function setCustomBase(v){ S.venue.customBase = num(v); renderQuoteDoc(); }
+function priceEdit(id,v){ const row=document.querySelector(`[data-lid="${id}"]`); if(v.trim()===''){ delete S.overrides[id]; } else { S.overrides[id]=num(v); } if(row) row.classList.toggle('ovr', S.overrides[id]!=null); repaintQuoteTotals(); }
+function resetLine(id){ delete S.overrides[id]; renderQuoteDoc(); }
+function depEdit(v){ S.depositOverride = v.trim()===''? null : num(v); repaintQuoteTotals(); }
+function toggleDepCredit(){ S.adj.depositCredited = !(S.adj.depositCredited!==false); if(S.invoice.pulled) pullInvoice(); renderQuoteControls(); renderQuoteDoc(); renderContract(); renderInvoice(); }
+function sponsorAdd(){ S.sponsors.push({id:'s'+Date.now(),name:'',amount:0,category:'Venue',status:'confirmed'}); renderQuoteControls(); renderQuoteDoc(); }
+function sponsorDel(i){ S.sponsors.splice(i,1); renderQuoteControls(); renderQuoteDoc(); }
+function sponsorEdit(i,k,v){ S.sponsors[i][k]= k==='amount'?num(v):v; if(k==='amount'||k==='status') renderQuoteDoc(); }
+
+function quotePlainText(){
+  const t=quoteTotals();
+  const L=[];
+  L.push('QUOTE — 170 ELDRIDGE LLC / CARRIAGE HOUSE');
+  L.push('Reference: '+S.deal.ref);
+  if(S.event.name) L.push('Event: '+S.event.name);
+  if(S.client.name) L.push('Client: '+S.client.name+(S.client.company?' ('+S.client.company+')':''));
+  if(S.event.date) L.push('Date: '+longDate(parseDate(S.event.date)));
+  L.push('');
+  const cat=(title,c,subv)=>{ L.push('── '+title.toUpperCase()+' '.padEnd(1)+'— '+fmt0(subv)); t.lines.filter(l=>l.cat===c).forEach(l=>{ L.push('   '+l.label+(l.note?' ('+l.note+')':'')+'  '+fmt0(l.price)); }); };
+  cat('Venue rental','venue',t.venueTotal);
+  if(S.sec.prod) cat('Production & equipment','prod',t.equipTotal);
+  if(S.sec.staff) cat('Staff & supplies','staff',t.staffTotal);
+  L.push('');
+  if(t.discount>0) L.push('DISCOUNT: −'+fmt0(t.discount));
+  if(t.surcharge>0) L.push('ADDITIONAL: +'+fmt0(t.surcharge));
+  if(t.tax>0) L.push('TAX / SERVICE ('+t.taxRate+'%): '+fmt0(t.tax));
+  L.push('TOTAL: '+fmt0(t.grand));
+  if(t.confirmed>0) L.push('NET (CONFIRMED SPONSORS): '+fmt0(t.netConfirmed));
+  if(t.potential>0) L.push('NET (ALL SPONSORS): '+fmt0(t.netPotential));
+  const credited=S.adj.depositCredited!==false;
+  const total=t.confirmed>0?t.netConfirmed:t.grand, half=Math.round(total/2);
+  const bal= credited? Math.max(0,total-t.deposit-half) : Math.max(0,total-half);
+  L.push('');
+  L.push('PAYMENT SCHEDULE');
+  L.push('  Security deposit ('+(credited?'credited to total':'refundable / held separately')+', on signing): '+fmt0(t.deposit));
+  L.push('  Half of total (14 days after signing): '+fmt0(half));
+  L.push('  Balance (14 days before event): '+fmt0(bal));
+  if(!credited) L.push('  Note: deposit is additional to the total; client pays '+fmt0(total+t.deposit)+', deposit refunded after event.');
+  L.push('');
+  L.push(S.contract.venueAddress);
+  L.push('Estimate only. Not binding until countersigned.');
+  return L.join('\n');
+}
+function copyQuote(){ navigator.clipboard.writeText(quotePlainText()).then(()=>toast('Quote copied to clipboard')); }
+
+/* ================= CONTRACT ================= */
+function contractCtx(){
+  const qt=quoteTotals();
+  const baseTotal = qt.confirmed>0? qt.netConfirmed : qt.grand;
+  const c=S.contract;
+  const total = (c.totalOverride!=null&&c.totalOverride!=='')? num(c.totalOverride): baseTotal;
+  const deposit = (c.depositOverride!=null&&c.depositOverride!=='')? num(c.depositOverride): Math.round(total*num(c.depositPct)/100);
+  const credited = S.adj.depositCredited!==false;
+  const half = Math.round(total/2);
+  const balance = credited ? Math.max(0, total-deposit-half) : Math.max(0, total-half);
+  const signD = parseDate(c.signDate);
+  const halfD = signD? addDays(signD, num(c.installDays)) : null;
+  const eventD = parseDate(S.event.date);
+  const balanceD = eventD? addDays(eventD, -num(c.balanceLeadDays)) : null;
+  return { total, deposit, half, balance, credited, signD, halfD, eventD, balanceD,
+    clientPays: credited? total : total+deposit,
+    dow:dowInfo(S.event.date), guests:(c.guestCap||S.event.guests),
+    t1:num(c.cancTier1), t2:num(c.cancTier2), half50:Math.round(total/2), qtIsOverride:(c.totalOverride!=null&&c.totalOverride!=='') };
+}
+const SEC = [
+  {id:'definitions', title:'DEFINITIONS', body:(f,x)=>`
+    <table class="ctable">
+      <tr><td class="k">Licensor</td><td>${esc(f.licensor)}, owner and operator of the Venue.</td></tr>
+      <tr><td class="k">Client</td><td>${esc(S.client.name||'[Client]')}${S.client.company?', '+esc(S.client.company):''}.</td></tr>
+      <tr><td class="k">Venue</td><td>${esc(f.venueAddress)} ("Carriage House").</td></tr>
+      <tr><td class="k">Event</td><td>${esc(S.event.name||'[Event]')}, on ${x.eventD?longDate(x.eventD):'[event date]'}.</td></tr>
+      <tr><td class="k">Total Amount Due</td><td>${fmt2(x.total)}${x.credited?', inclusive of the Security Deposit as set forth in these terms':', payable in addition to the refundable Security Deposit'}.</td></tr>
+      <tr><td class="k">Security Deposit</td><td>${fmt2(x.deposit)}, due upon signing${x.credited?' and credited toward the Total Amount Due, unless retained on account of damage or violation of this Agreement':', held as a refundable security deposit and returned after the Event less any deductions for damage, additional cleaning, or violation of this Agreement. The Security Deposit is in addition to, and not part of, the Total Amount Due'}.</td></tr>
+    </table>`},
+  {id:'grant', title:'GRANT OF LICENSE', body:(f,x)=>`<p>The Licensor grants the Client a revocable, non-transferable license to use the Venue for the Event on the terms set forth in this Agreement. This Agreement is a license to use the Venue and does not create a tenancy, lease, or other interest in the property.</p>`},
+  {id:'rental', title:'RENTAL PERIOD & ACCESS', body:(f,x)=>`
+    <table class="ctable">
+      <tr><td class="k">Client Access From</td><td>${esc(f.accessFrom||'[time]')}, ${x.eventD?longDate(x.eventD):'[event date]'}</td></tr>
+      <tr><td class="k">Client Access Until</td><td>${esc(f.accessUntil||f.vacateTime||'[time]')}</td></tr>
+      ${f.admissionOpen?`<tr><td class="k">Guest Admission Opens</td><td>${esc(f.admissionOpen)}</td></tr>`:''}
+      ${f.admissionClose?`<tr><td class="k">Guest Admission Closes</td><td>${esc(f.admissionClose)}</td></tr>`:''}
+      <tr><td class="k">Maximum Guest Capacity</td><td>${esc(x.guests)} persons</td></tr>
+    </table>
+    <p>The Client shall vacate the Venue, and ensure all guests have vacated, no later than ${esc(f.vacateTime)} following the Event. Failure to vacate may result in additional charges at the Licensor&#39;s then-current hourly rate, and the Licensor may arrange removal of persons from the premises at the Client&#39;s expense.</p>`},
+  {id:'residential', title:'RESIDENTIAL STAY', body:(f,x)=>`
+    <p>In addition to the event license, the Licensor grants the Client a residential accommodation license to occupy the Venue as an overnight guest for the period below. This residential stay is separate from, and in addition to, the event license and is governed by the terms of this Agreement.</p>
+    <table class="ctable">
+      <tr><td class="k">Check-In</td><td>${esc(f.residential.checkIn||'[date & time]')}</td></tr>
+      <tr><td class="k">Check-Out</td><td>${esc(f.residential.checkOut||'[date & time]')}</td></tr>
+    </table>
+    <p>The Client and all occupants shall: keep the Venue clean and free of excessive trash; respect quiet hours and applicable noise ordinances; observe the smoking policy of this Agreement; bring no unauthorized or additional overnight guests beyond those approved by the Licensor; promptly report and remain responsible for any damage beyond normal wear and tear; and honor check-in and check-out times. Except during the booked event window set forth in this Agreement, no events, event operations (including load-in, load-out, setup, or breakdown), or additional guests shall take place at the Venue during the residential stay unless mutually agreed in writing. Outside the event window, the residential stay is for private overnight accommodation only.</p>`},
+  {id:'areas', title:'PERMITTED AREAS & ACCESS RESTRICTIONS', body:(f,x)=>`
+    <p>Guest access during the Event is limited to designated common areas, and any rooftop or upper-floor access is subject to restrictions communicated by Venue Staff. Bedrooms, utility spaces, and staff areas are off-limits to guests during the Event. Venue Staff may deny access to any area without prior notice.</p>`},
+  {id:'staffing', title:'STAFFING, SUPPLIES & PRODUCTION', body:(f,x)=>`
+    <p>The Total Amount Due is inclusive of Venue staffing, supplies, and production costs as itemized in the Licensor&#39;s quote. The Licensor is responsible for providing and managing all included Venue Staff. The Client shall not direct or instruct Venue Staff without prior agreement. The Client shall provide and be solely responsible for any Door Staff engaged to manage guest entry; Venue Staff and security retain the right, in their sole discretion, to deny entry to or remove any person from the Venue at any time.</p>`},
+  {id:'entry', title:'ENTRY, GUEST MANAGEMENT & ADDRESS', body:(f,x)=>`
+    <p>The address of the Venue shall be treated as confidential and distributed only to approved guests. The Client assumes full responsibility for controlling distribution of the address and for the conduct of all persons to whom it is disclosed. The Client&#39;s Door Staff shall have discretion over admission of guests, subject at all times to the overriding authority of Venue Staff and security.</p>`},
+  {id:'noise', title:'NOISE RESTRICTIONS & STANDARDS OF CONDUCT', body:(f,x)=>`
+    <p>Sound levels within the Venue shall not exceed ${esc(f.decibel)} decibels (dB), as measured by the decibel meter in the DJ booth. The Client and any audio personnel are responsible for maintaining compliance throughout the Event. The Licensor may require immediate reduction of sound levels, and repeated violations may result in termination of the Event without refund. Doors and windows providing access to the rooftop or exterior must remain closed during the Event to contain sound and comply with applicable ordinances.</p>`},
+  {id:'smoking', title:'SMOKING POLICY', body:(f,x)=>`
+    <p>Smoking of any kind, including cigarettes, cigars, e-cigarettes, and vaping devices, is strictly prohibited inside the Venue and in all interior areas. Smoking is permitted on the rooftop only, subject to access restrictions. The Client is responsible for communicating this policy to all guests and ensuring compliance.</p>`},
+  {id:'insurance', title:'EVENT INSURANCE', body:(f,x)=>`
+    <p>Prior to the Event, the Client shall obtain and maintain, at the Client&#39;s sole expense, a comprehensive event liability insurance policy covering personal injury and property damage arising out of the Event, and shall name ${esc(f.licensor)} as an additional insured. The Client shall provide a certificate of insurance evidencing such coverage no later than ${f.insuranceDate?esc(longDate(parseDate(f.insuranceDate))):'[date]'}. Failure to furnish proof of insurance by this date shall constitute a material breach of this Agreement.</p>`},
+  {id:'fees', title:'FEES, PAYMENT & SECURITY DEPOSIT', body:(f,x)=>`
+    <table class="ctable">
+      <tr><td class="k">Security Deposit (due upon signing; ${x.credited?'credited to total':'refundable, held separately'})</td><td>${fmt2(x.deposit)}</td></tr>
+      <tr><td class="k">First Installment, one-half of total (${x.halfD?esc(longDate(x.halfD)):'[signing + '+num(f.installDays)+' days]'})</td><td>${fmt2(x.half)}</td></tr>
+      <tr><td class="k">Final Balance (${x.balanceD?esc(longDate(x.balanceD)):'['+num(f.balanceLeadDays)+' days before event]'})</td><td>${fmt2(x.balance)}</td></tr>
+      <tr><td class="k">Total Amount Due${x.credited?'':' (excluding refundable deposit)'}</td><td><b>${fmt2(x.total)}</b></td></tr>
+      ${x.credited?'':`<tr><td class="k">Total Payable at Signing Through Event (incl. deposit)</td><td><b>${fmt2(x.clientPays)}</b></td></tr>`}
+    </table>
+    <p>Payment shall be made according to the schedule above. The Security Deposit is due upon signing; one-half of the Total Amount Due is payable by ${x.halfD?esc(longDate(x.halfD)):'[date]'}; and the remaining balance is payable by ${x.balanceD?esc(longDate(x.balanceD)):'[date]'}. The Licensor may cancel this Agreement and deny access to the Venue if any payment is not received by its due date.</p>
+    ${x.credited?
+    `<p><b>Security Deposit.</b> The Security Deposit is held as security for the Client&#39;s obligations. Provided no damage occurs and no term is violated, it is credited toward the Total Amount Due, so that the Client&#39;s total payment obligation is ${fmt2(x.total)} and no separate deposit is refunded. If damage, cleaning beyond normal post-event standards, or any violation occurs, the Licensor may retain all or part of the Security Deposit and apply it toward such costs; in that event the deposit is not credited, and the Client remains liable for the full amount due together with any costs exceeding the amount retained.</p>`
+    :
+    `<p><b>Security Deposit.</b> The Security Deposit of ${fmt2(x.deposit)} is held by the Licensor as security for the Client&#39;s obligations and is in addition to the Total Amount Due. The Client&#39;s total payment through the Event is ${fmt2(x.clientPays)}. Provided no damage occurs, no additional cleaning is required, and no term is violated, the Security Deposit shall be returned to the Client within fourteen (14) days after the Event. If damage, cleaning beyond normal post-event standards, or any violation occurs, the Licensor may retain all or part of the Security Deposit and apply it toward such costs, and the Client shall remain liable for any costs exceeding the amount retained.</p>`}`},
+  {id:'damage', title:'DAMAGE TO PROPERTY & CLIENT LIABILITY', body:(f,x)=>`
+    <p>The Client shall be jointly and severally liable for any and all damage to the Venue, its fixtures, furniture, equipment, and contents caused by the Client, guests, Door Staff, or any person admitted at the Client&#39;s direction. This liability is not limited to the amount of the Security Deposit; the Client shall be responsible for the full cost of repair or replacement. The Client agrees to indemnify, defend, and hold harmless ${esc(f.licensor)} and its members, officers, employees, and agents from any claims arising out of the Event or the Client&#39;s use of the Venue.</p>`},
+  {id:'property', title:'PERSONAL PROPERTY', body:(f,x)=>`
+    <p>The Licensor, ${esc(f.licensor)}, and Venue Staff shall not be responsible or liable for any loss, theft, or damage to personal property belonging to the Client or any guest, however caused, while on or about the Venue. The Client and the Client&#39;s guests bring personal property onto the Venue at their own risk.</p>
+    <p>Any property left at the Venue following the conclusion of the booking shall be retained for twenty-four (24) hours. Any property not reclaimed within twenty-four (24) hours after the end of the booking shall be deemed abandoned and forfeited, and the Licensor may dispose of, donate, or discard such property at its sole discretion without liability to the Client or any guest.</p>`},
+  {id:'reserved', title:'LICENSOR\'S RESERVED RIGHTS', body:(f,x)=>`
+    <p>The Licensor and its Venue Staff reserve the right to deny entry to or remove any person; to terminate the Event immediately if the Client or guests violate any material term, engage in unlawful conduct, or create a safety risk; to restrict access to any area without notice; and to require immediate compliance with any instruction relating to noise, occupancy, safety, or conduct. In the event of early termination for the Client&#39;s breach, no refund of amounts paid shall be due; the Security Deposit shall ${x.credited?'not be credited and shall instead be':'be'} retained and applied toward damages, cleaning, or other costs arising from the breach.</p>`},
+  {id:'cancellation', title:'CANCELLATION', body:(f,x)=>`
+    <p>In the event the Client cancels this Agreement, the following shall apply, calculated by reference to the Total Amount Due of ${fmt2(x.total)}:</p>
+    <ul>
+      <li>Cancellation more than ${x.t1} days prior to the Event: the Security Deposit (${fmt2(x.deposit)}) shall be forfeited as a non-refundable booking fee; all other amounts paid shall be refunded in full.</li>
+      <li>Cancellation between ${x.t2} and ${x.t1} days prior to the Event: fifty percent (50%) of the Total Amount Due (${fmt2(x.half50)})${x.credited?', inclusive of the Security Deposit,':''} shall be forfeited; any amounts paid in excess shall be refunded${x.credited?'':', and the refundable Security Deposit shall be returned less any deductions'}.</li>
+      <li>Cancellation fewer than ${x.t2} days prior to the Event: the full Total Amount Due (${fmt2(x.total)}) shall be forfeited, and no refund shall be due.</li>
+    </ul>
+    <p>All refunds due to the Client shall be paid within ten (10) business days of cancellation. If the Licensor secures a replacement booking for the Event date, the Licensor shall refund any forfeited amounts that exceed the Licensor&#39;s actual losses and the non-refundable Security Deposit. If the Licensor cancels this Agreement for reasons other than the Client&#39;s breach, the Licensor shall refund all amounts paid, including the Security Deposit, within five (5) business days.</p>`},
+  {id:'force', title:'FORCE MAJEURE', body:(f,x)=>`
+    <p>Neither party shall be in breach or liable for any failure or delay in performance arising from causes beyond that party&#39;s reasonable control, including acts of God, government action, public health emergency, or civil unrest. In such circumstances the parties shall negotiate in good faith regarding rescheduling or a fair allocation of costs.</p>`},
+  {id:'governing', title:'GOVERNING LAW & DISPUTE RESOLUTION', body:(f,x)=>`
+    <p>This Agreement shall be governed by and construed in accordance with the laws of the State of ${esc(f.governingState)}, without regard to its conflict of law principles. Any dispute arising out of or in connection with this Agreement shall be resolved in the state or federal courts located in that State.</p>`},
+  {id:'entire', title:'ENTIRE AGREEMENT & AMENDMENTS', body:(f,x)=>`
+    <p>This Agreement constitutes the entire agreement between the parties and supersedes all prior discussions. Any amendment must be in writing and signed by both parties.</p>`},
+  {id:'sever', title:'SEVERABILITY', body:(f,x)=>`
+    <p>If any provision of this Agreement is held to be invalid or unenforceable, the remaining provisions shall continue in full force and effect.</p>`}
+];
+function contractDocHtml(){
+  const f=S.contract, x=contractCtx();
+  let n=0, secs='';
+  SEC.forEach(s=>{ const on = s.id==='residential' ? f.residential.on : f.sections[s.id]; if(!on) return; n++; secs+=`<h3 class="cs"><span class="n">${n}.</span> ${s.title}</h3>${s.body(f,x)}`; });
+  return `<div class="cdoc" id="cdocInner">
+    <h2 class="ct">Venue Rental Agreement</h2>
+    <div class="csub">${esc(f.licensor)} · ${esc(f.venueAddress)} · ${esc(S.deal.ref)}${x.eventD?' · '+esc(longDate(x.eventD)):''}</div>
+    ${secs}
+    <div class="sig">
+      <div class="sigblock">LICENSOR — ${esc(f.licensor)}<br><br>Signature / Date</div>
+      <div class="sigblock">CLIENT — ${esc(S.client.name||'')}<br><br>Signature / Date</div>
+    </div>
+  </div>`;
+}
+function renderContractControls(){
+  const f=S.contract, x=contractCtx();
+  const secList = SEC.filter(s=>s.id!=='residential').map(s=>{
+    const on=f.sections[s.id];
+    return `<div class="sectog ${on?'':'off'}"><span class="st-n">${esc(s.title.split(' ')[0].slice(0,3))}</span><span class="st-t">${esc(s.title)}</span><div class="sw ${on?'on':''}" onclick="Portal.toggleSection('${s.id}')"></div></div>`;
+  }).join('');
+  const incCount = SEC.filter(s=> s.id==='residential' ? f.residential.on : f.sections[s.id]).length;
+  $('contractControls').innerHTML=`
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Agreement Basics</h3></div>
+    <div class="panel-body">
+      <div class="row2">
+        <div class="field"><label>Signing date</label><input type="date" class="inp" value="${esc(f.signDate)}" oninput="Portal.contractSet('signDate',this.value)"></div>
+        <div class="field"><label>Governing state</label><input class="inp" value="${esc(f.governingState)}" oninput="Portal.contractSet('governingState',this.value)"></div>
+      </div>
+      <div class="field"><label>Licensor entity</label><input class="inp" value="${esc(f.licensor)}" oninput="Portal.contractSet('licensor',this.value)"></div>
+      <div class="field"><label>Venue address</label><input class="inp" value="${esc(f.venueAddress)}" oninput="Portal.contractSet('venueAddress',this.value)"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Financials</h3><span class="ph-right">${x.qtIsOverride?'manual':'from quote'}</span></div>
+    <div class="panel-body">
+      <div class="field"><label>Total amount due ${x.qtIsOverride?'<button class="xbtn" style="font-size:11px" onclick="Portal.contractSet(\'totalOverride\',null)" title="Reset to quote total">↺ quote</button>':''}</label>
+        <div class="money"><input class="inp" value="${x.total}" oninput="Portal.contractSet('totalOverride',this.value)"></div></div>
+      <div class="row2">
+        <div class="field"><label>Deposit %</label><input class="inp" value="${f.depositPct}" oninput="Portal.contractSet('depositPct',this.value)"></div>
+        <div class="field"><label>Deposit amount ${(f.depositOverride!=null&&f.depositOverride!=='')?'<button class="xbtn" style="font-size:11px" onclick="Portal.contractSet(\'depositOverride\',null)">↺</button>':''}</label><div class="money"><input class="inp" value="${x.deposit}" oninput="Portal.contractSet('depositOverride',this.value)"></div></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Half due (days after signing)</label><input class="inp" value="${f.installDays}" oninput="Portal.contractSet('installDays',this.value)"></div>
+        <div class="field"><label>Balance (days before event)</label><input class="inp" value="${f.balanceLeadDays}" oninput="Portal.contractSet('balanceLeadDays',this.value)"></div>
+      </div>
+      <div class="togrow ${x.credited?'':'off'}" style="margin-top:4px">
+        <div class="sw ${x.credited?'on':''}" onclick="Portal.toggleDepCredit()"></div>
+        <div class="tl">Credit deposit to total<small>${x.credited?'deposit is part of the total':'refundable — held on top of the total'}</small></div>
+      </div>
+      <div class="hint">Schedule: deposit ${fmt0(x.deposit)} on signing · half ${fmt0(x.half)} ${x.halfD?'by '+longDate(x.halfD):''} · balance ${fmt0(x.balance)} ${x.balanceD?'by '+longDate(x.balanceD):''}${x.credited?'':' · client pays '+fmt0(x.clientPays)+' incl. refundable deposit'}</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Event & Access</h3></div>
+    <div class="panel-body">
+      <div class="row2">
+        <div class="field"><label>Access from</label><input class="inp" placeholder="5:00 PM" value="${esc(f.accessFrom)}" oninput="Portal.contractSet('accessFrom',this.value)"></div>
+        <div class="field"><label>Access until</label><input class="inp" placeholder="1:00 AM" value="${esc(f.accessUntil)}" oninput="Portal.contractSet('accessUntil',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Admission opens</label><input class="inp" value="${esc(f.admissionOpen)}" oninput="Portal.contractSet('admissionOpen',this.value)"></div>
+        <div class="field"><label>Admission closes</label><input class="inp" value="${esc(f.admissionClose)}" oninput="Portal.contractSet('admissionClose',this.value)"></div>
+      </div>
+      <div class="row3">
+        <div class="field"><label>Guest cap</label><input class="inp" value="${esc(f.guestCap||S.event.guests)}" oninput="Portal.contractSet('guestCap',this.value)"></div>
+        <div class="field"><label>Vacate time</label><input class="inp" value="${esc(f.vacateTime)}" oninput="Portal.contractSet('vacateTime',this.value)"></div>
+        <div class="field"><label>Max dB</label><input class="inp" value="${esc(f.decibel)}" oninput="Portal.contractSet('decibel',this.value)"></div>
+      </div>
+      <div class="field"><label>Insurance certificate due</label><input type="date" class="inp" value="${esc(f.insuranceDate)}" oninput="Portal.contractSet('insuranceDate',this.value)"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Residential Stay</h3><div class="sw ${f.residential.on?'on':''}" style="margin-left:auto" onclick="Portal.resToggle()"></div></div>
+    <div class="panel-body" style="${f.residential.on?'':'display:none'}">
+      <div class="field"><label>Check-in (date & time)</label><input class="inp" placeholder="3:00 PM, Sunday, ..." value="${esc(f.residential.checkIn)}" oninput="Portal.resSet('checkIn',this.value)"></div>
+      <div class="field"><label>Check-out (date & time)</label><input class="inp" placeholder="11:00 AM, Friday, ..." value="${esc(f.residential.checkOut)}" oninput="Portal.resSet('checkOut',this.value)"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Cancellation Tiers</h3></div>
+    <div class="panel-body">
+      <div class="row2">
+        <div class="field"><label>Full-refund cutoff (days)</label><input class="inp" value="${f.cancTier1}" oninput="Portal.contractSet('cancTier1',this.value)"></div>
+        <div class="field"><label>50% cutoff (days)</label><input class="inp" value="${f.cancTier2}" oninput="Portal.contractSet('cancTier2',this.value)"></div>
+      </div>
+      <div class="hint">Deposit forfeited beyond ${f.cancTier1}d · 50% (${fmt0(x.half50)}) forfeited ${f.cancTier2}–${f.cancTier1}d · full forfeit under ${f.cancTier2}d.</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Include Sections</h3><span class="ph-right">${incCount}/${SEC.length}</span></div>
+    <div class="panel-body">${secList}</div>
+  </div>`;
+}
+function renderContractDoc(){ $('contractDoc').innerHTML = contractDocHtml() + `
+  <div class="actions no-print">
+    <button class="act primary" onclick="Portal.copyContract()">Copy contract</button>
+    <button class="act no-present" onclick="window.print()">Print / PDF</button>
+    <button class="act flow no-present" onclick="Portal.pushToInvoice()">Make invoice →</button>
+  </div>`; }
+function renderContract(){ renderContractControls(); renderContractDoc(); }
+function contractSet(k,v){ S.contract[k]= (v===null?null:v); if(v===null){ renderContractControls(); } renderContractDoc(); }
+function toggleSection(id){ S.contract.sections[id]=!S.contract.sections[id]; renderContractControls(); renderContractDoc(); }
+function resToggle(){ S.contract.residential.on=!S.contract.residential.on; renderContractControls(); renderContractDoc(); }
+function resSet(k,v){ S.contract.residential[k]=v; renderContractDoc(); }
+function pushToContract(){
+  const qt=quoteTotals();
+  S.contract.totalOverride=null; S.contract.depositOverride=null;
+  if(!S.contract.insuranceDate && S.event.date){ const d=parseDate(S.event.date); S.contract.insuranceDate=addDays(d,-7).toISOString().slice(0,10); }
+  renderContract(); go('contract'); toast('Quote pushed to contract');
+}
+function contractPlainText(){
+  const tmp=document.createElement('div'); tmp.innerHTML=contractDocHtml();
+  const inner=tmp.querySelector('#cdocInner');
+  let out='VENUE RENTAL AGREEMENT\n'+S.contract.licensor+' · '+S.contract.venueAddress+' · '+S.deal.ref+'\n\n';
+  inner.querySelectorAll('h3.cs, p, li, .ctable tr').forEach(node=>{
+    const tx = (node.textContent||'').replace(/\s+/g,' ').trim();
+    if(node.classList.contains('cs')) out+='\n'+tx+'\n';
+    else if(node.tagName==='TR'){ const c=node.querySelectorAll('td'); out+='  '+((c[0]?c[0].textContent:'')||'').replace(/\s+/g,' ').trim()+': '+((c[1]?c[1].textContent:'')||'').replace(/\s+/g,' ').trim()+'\n'; }
+    else if(node.tagName==='LI') out+='  • '+tx+'\n';
+    else out+=tx+'\n';
+  });
+  return out;
+}
+function copyContract(){ navigator.clipboard.writeText(contractPlainText()).then(()=>toast('Contract copied to clipboard')); }
+
+/* ================= INVOICE ================= */
+function invoiceTotals(){
+  const items=S.invoice.items.reduce((a,i)=>a+num(i.amount),0);
+  const paid=S.invoice.payments.filter(p=>p.paid).reduce((a,p)=>a+num(p.amount),0);
+  return {items:Math.round(items), paid:Math.round(paid), balance:Math.round(items-paid)};
+}
+function pullInvoice(){
+  const t=quoteTotals(), x=contractCtx();
+  const items=[];
+  if(t.venueTotal>0) items.push({id:'i1',label:'Venue rental',amount:t.venueTotal});
+  if(t.equipTotal>0) items.push({id:'i2',label:'Production & equipment',amount:t.equipTotal});
+  if(t.staffTotal>0) items.push({id:'i3',label:'Staff & supplies',amount:t.staffTotal});
+  if(t.discount>0) items.push({id:'i4',label:'Discount / credit',amount:-t.discount});
+  if(t.surcharge>0) items.push({id:'i5',label:'Additional charge',amount:t.surcharge});
+  if(t.tax>0) items.push({id:'i6',label:'Tax / service ('+t.taxRate+'%)',amount:Math.round(t.tax)});
+  if(!x.credited) items.push({id:'i7',label:'Refundable security deposit (returned after event)',amount:x.deposit});
+  S.invoice.items=items;
+  S.invoice.payments=[
+    {id:'p1',label:x.credited?'Security deposit (credited to total)':'Security deposit (refundable, held)',amount:x.deposit,paid:false},
+    {id:'p2',label:'Half of total',amount:x.half,paid:false},
+    {id:'p3',label:'Final balance',amount:x.balance,paid:false}
+  ];
+  if(!S.invoice.number) S.invoice.number='INV-'+(S.deal.ref.split('-').pop());
+  S.invoice.pulled=true;
+}
+function renderInvoiceControls(){
+  const inv=S.invoice;
+  const itemRows=inv.items.map((it,i)=>`
+    <div class="invrow"><input class="inp" value="${esc(it.label)}" oninput="Portal.invEdit(${i},'label',this.value)"><div class="money"><input class="inp" value="${it.amount}" oninput="Portal.invEdit(${i},'amount',this.value)"></div><button class="xbtn" onclick="Portal.invItemDel(${i})">✕</button></div>`).join('');
+  const payRows=inv.payments.map((p,i)=>`
+    <div class="invrow"><input class="inp" value="${esc(p.label)}" oninput="Portal.payEdit(${i},'label',this.value)"><div class="money"><input class="inp" value="${p.amount}" oninput="Portal.payEdit(${i},'amount',this.value)"></div><button class="xbtn" onclick="Portal.payDel(${i})">✕</button></div>
+    <div style="margin:-2px 0 8px"><span class="paidtag ${p.paid?'paid':'due'}" onclick="Portal.payToggle(${i})">${p.paid?'● paid':'○ due'}</span></div>`).join('');
+  $('invoiceControls').innerHTML=`
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Invoice Details</h3></div>
+    <div class="panel-body">
+      <div class="row2">
+        <div class="field"><label>Invoice #</label><input class="inp" value="${esc(inv.number)}" oninput="Portal.invSet('number',this.value)"></div>
+        <div class="field"><label>Issue date</label><input type="date" class="inp" value="${esc(inv.date)}" oninput="Portal.invSet('date',this.value)"></div>
+      </div>
+      ${!inv.pulled?'<button class="addbtn" onclick="Portal.pullInvoice(true)">Pull line items from quote</button>':'<button class="io-btn" style="width:100%" onclick="Portal.pullInvoice(true)">Re-pull from quote</button>'}
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Line Items</h3></div>
+    <div class="panel-body">
+      ${itemRows||'<div class="hint">No line items yet.</div>'}
+      <button class="addbtn" onclick="Portal.invItemAdd()">+ Add line item</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Payments Received</h3></div>
+    <div class="panel-body">
+      ${payRows||'<div class="hint">No payments tracked.</div>'}
+      <button class="addbtn" onclick="Portal.payAdd()">+ Add payment</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Notes & Options</h3></div>
+    <div class="panel-body">
+      <div class="field"><label>Notes on invoice</label><textarea class="inp" oninput="Portal.invSet('notes',this.value)">${esc(inv.notes)}</textarea></div>
+      <div class="togrow ${inv.showPayInfo?'':'off'}"><div class="sw ${inv.showPayInfo?'on':''}" onclick="Portal.invSet('showPayInfo',${!inv.showPayInfo})"></div><div class="tl">Show payment instructions</div></div>
+    </div>
+  </div>`;
+}
+function renderInvoiceDoc(){
+  const inv=S.invoice, t=invoiceTotals();
+  const itemsHtml=inv.items.map(it=>`<div class="li"><span class="ln">${esc(it.label)}</span><span class="lead"></span><span class="lp">${num(it.amount)<0?'−'+fmt0(-num(it.amount)):fmt0(it.amount)}</span></div>`).join('')||'<div class="hint">No line items.</div>';
+  const payHtml=inv.payments.map(p=>`<div class="li"><span class="ln">${esc(p.label)} <span class="paidtag ${p.paid?'paid':'due'}" style="pointer-events:none">${p.paid?'paid':'due'}</span></span><span class="lead"></span><span class="lp">${fmt0(p.amount)}</span></div>`).join('');
+  const payInfo=inv.showPayInfo?`
+    <div class="sched"><div class="sched-h">Payment instructions</div>
+      <div class="sched-r"><span class="sk">Zelle / Venmo</span><span class="sv">170eldridge@gmail.com</span></div>
+      <div class="sched-r"><span class="sk">Check payable to</span><span class="sv">170 Eldridge LLC</span></div>
+      <div class="sched-r"><span class="sk">ACH — Wells Fargo</span><span class="sv">Rtg 102307164 · Acct 3685727525</span></div>
+      <div class="sched-r"><span class="sk">Wire — Wells Fargo</span><span class="sv">Rtg 121000248 · Acct 3685727525</span></div>
+      <div class="sched-r"><span class="sk">Credit card</span><span class="sv">+3.5% processing</span></div>
+    </div>`:'';
+  $('invoiceDoc').innerHTML=`
+  <div class="doc-head">
+    <div><div class="dt">Invoice</div><div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px">${esc(S.client.name||'—')}${S.client.company?' · '+esc(S.client.company):''}</div></div>
+    <div class="dmeta">${esc(inv.number||'—')}<br>${inv.date?longDate(parseDate(inv.date)):'—'}<br>${esc(S.deal.ref)}</div>
+  </div>
+  <div class="doc-body">
+    <div class="grp"><div class="grp-h"><span class="s">//</span><span class="t">${esc(S.event.name||'Event')}</span></div>${itemsHtml}</div>
+    <div class="totals">
+      <div class="tl-line"><span class="k">Invoice total</span><span class="v">${fmt0(t.items)}</span></div>
+      ${t.paid>0?`<div class="tl-line disc"><span class="k">Payments received</span><span class="v">−${fmt0(t.paid)}</span></div>`:''}
+      <div class="tl-line grand"><span class="k">Balance due</span><span class="v">${fmt0(t.balance)}</span></div>
+    </div>
+    ${payHtml?`<div class="grp"><div class="grp-h"><span class="s">//</span><span class="t">Payment schedule</span></div>${payHtml}</div>`:''}
+    ${payInfo}
+    ${inv.notes?`<div class="tl-note" style="margin-top:12px;font-size:11px;color:var(--muted)">${esc(inv.notes)}</div>`:''}
+    <div class="actions no-print"><button class="act primary" onclick="Portal.copyInvoice()">Copy invoice</button><button class="act no-present" onclick="window.print()">Print / PDF</button></div>
+  </div>`;
+}
+function renderInvoice(){ renderInvoiceControls(); renderInvoiceDoc(); }
+function invSet(k,v){ S.invoice[k]=v; if(typeof v==='boolean') renderInvoiceControls(); renderInvoiceDoc(); }
+function invItemAdd(){ S.invoice.items.push({id:'it'+Date.now(),label:'',amount:0}); renderInvoiceControls(); renderInvoiceDoc(); }
+function invItemDel(i){ S.invoice.items.splice(i,1); renderInvoiceControls(); renderInvoiceDoc(); }
+function invEdit(i,k,v){ S.invoice.items[i][k]= k==='amount'?num(v):v; renderInvoiceDoc(); }
+function payAdd(){ S.invoice.payments.push({id:'pm'+Date.now(),label:'',amount:0,paid:false}); renderInvoiceControls(); renderInvoiceDoc(); }
+function payDel(i){ S.invoice.payments.splice(i,1); renderInvoiceControls(); renderInvoiceDoc(); }
+function payEdit(i,k,v){ S.invoice.payments[i][k]= k==='amount'?num(v):v; renderInvoiceDoc(); }
+function payToggle(i){ S.invoice.payments[i].paid=!S.invoice.payments[i].paid; renderInvoiceControls(); renderInvoiceDoc(); }
+function pullInvoiceBtn(){ pullInvoice(); renderInvoiceControls(); renderInvoiceDoc(); toast('Pulled from quote'); }
+function pushToInvoice(){ pullInvoice(); renderInvoice(); go('invoice'); toast('Invoice built from quote'); }
+function invoicePlainText(){
+  const inv=S.invoice, t=invoiceTotals(); const L=[];
+  L.push('INVOICE — 170 ELDRIDGE LLC / CARRIAGE HOUSE');
+  L.push((inv.number||'')+'  ·  '+(inv.date?longDate(parseDate(inv.date)):''));
+  if(S.client.name) L.push('Bill to: '+S.client.name+(S.client.company?' ('+S.client.company+')':''));
+  if(S.event.name) L.push('Event: '+S.event.name);
+  L.push('');
+  inv.items.forEach(it=>L.push('  '+it.label+'  '+(num(it.amount)<0?'−'+fmt0(-num(it.amount)):fmt0(it.amount))));
+  L.push('');
+  L.push('INVOICE TOTAL: '+fmt0(t.items));
+  if(t.paid>0) L.push('PAYMENTS RECEIVED: −'+fmt0(t.paid));
+  L.push('BALANCE DUE: '+fmt0(t.balance));
+  if(inv.payments.length){ L.push(''); L.push('PAYMENT SCHEDULE'); inv.payments.forEach(p=>L.push('  '+p.label+': '+fmt0(p.amount)+' ['+(p.paid?'paid':'due')+']')); }
+  if(inv.showPayInfo){ L.push(''); L.push('PAYMENT: Zelle/Venmo 170eldridge@gmail.com · Check to 170 Eldridge LLC · ACH Wells Fargo Rtg 102307164 Acct 3685727525 · Wire Rtg 121000248 · Card +3.5%'); }
+  return L.join('\n');
+}
+function copyInvoice(){ navigator.clipboard.writeText(invoicePlainText()).then(()=>toast('Invoice copied to clipboard')); }
+
+
+/* ---------------- IO ---------------- */
+function newDeal(){ if(!confirm('Start a new deal? Unsaved changes will be lost.')) return; S=freshState(); boot(); toast('New deal started'); }
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=(S.deal.ref||'carriage-house')+'.json'; a.click(); URL.revokeObjectURL(a.href);
+  toast('Deal saved to file');
+}
+function importJSON(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); S=Object.assign(freshState(),d); boot(); toast('Deal loaded'); }catch(err){ toast('Could not read that file'); } e.target.value=''; };
+  r.readAsText(f);
+}
+
+function boot(){
+  $('refChip').textContent=S.deal.ref;
+  if(window.Hub && Hub.onRender) Hub.onRender();
+  document.body.classList.toggle('presentation',S.present);
+  $('presentBtn').textContent = S.present?'Exit present':'Present';
+  renderQuoteControls(); renderQuoteDoc();
+  renderContract(); renderInvoice();
+  go(S.stage||'quote');
+}
+
+return { go, togglePresent, set, toggleProd, staffEdit, supplyEdit, priceEdit, resetLine, depEdit,
+  toggleSec, toggleCustomBase, setCustomBase, toggleDepCredit,
+  sponsorAdd, sponsorDel, sponsorEdit, copyQuote,
+  pushToContract, contractSet, toggleSection, resToggle, resSet, copyContract,
+  pushToInvoice, pullInvoice:pullInvoiceBtn, invSet, invItemAdd, invItemDel, invEdit,
+  payAdd, payDel, payEdit, payToggle, copyInvoice,
+  newDeal, exportJSON, importJSON,
+  _S:()=>S,
+  _quoteTotals:()=>quoteTotals(),
+  _contractCtx:()=>contractCtx(),
+  _invoiceTotals:()=>invoiceTotals(),
+  _contractText:()=>contractPlainText(),
+  _quoteText:()=>quotePlainText(),
+  _invoiceText:()=>invoicePlainText(),
+  _pullInvoice:()=>pullInvoice(),
+  _fresh:()=>freshState(),
+  _load:(obj)=>{ S=Object.assign(freshState(),obj); boot(); },
+  _boot:()=>boot(),
+  _toast:(m)=>toast(m),
+  _init:()=>{ S=freshState(); boot(); } };
+})();
+window.Portal = Portal;
+
+/* ================================================================
+   HUB INTEGRATION LAYER
+   Connects portal.html to the 170 Eldridge hub (index.html),
+   Google Sheets (via hub handoff), Calendar, and Gmail drafts.
+   When opened standalone (no prefill), the portal runs offline
+   exactly as before -- no auth, no network.
+   ================================================================ */
+const Hub = (function(){
+"use strict";
+const CAL_ID = encodeURIComponent('170Eldridge@gmail.com');
+let ctx = { active:false, rowIndex:null, refId:'', token:'', calendarEventId:'', inquiry:null };
+
+const gid = id => document.getElementById(id);
+function prefill(){ try{ return JSON.parse(sessionStorage.getItem('170e_prefill')||'null'); }catch(e){ return null; } }
+function token(){ return ctx.token || sessionStorage.getItem('170e_token') || ''; }
+function user(){ return sessionStorage.getItem('170e_user') || ''; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---- time helpers ---- */
+function to24(t){
+  if(!t) return null;
+  t=String(t).trim();
+  let m=t.match(/^(\d{1,2}):(\d{2})\s*([AaPp])\.?[Mm]\.?$/);
+  if(m){ let h=+m[1]%12; if(/[Pp]/.test(m[3])) h+=12; return String(h).padStart(2,'0')+':'+m[2]; }
+  m=t.match(/^(\d{1,2})\s*([AaPp])\.?[Mm]\.?$/);
+  if(m){ let h=+m[1]%12; if(/[Pp]/.test(m[2])) h+=12; return String(h).padStart(2,'0')+':00'; }
+  m=t.match(/^(\d{1,2}):(\d{2})$/);
+  if(m) return String(+m[1]).padStart(2,'0')+':'+m[2];
+  return null;
+}
+function pretty(t){
+  const t24=to24(t); if(!t24) return t||'';
+  let [h,mi]=t24.split(':').map(Number);
+  const ap=h>=12?'PM':'AM'; h=h%12||12;
+  return h+':'+String(mi).padStart(2,'0')+' '+ap;
+}
+function hoursBetween(a,b){
+  const A=to24(a), B=to24(b); if(!A||!B) return null;
+  const [ah,am]=A.split(':').map(Number), [bh,bm]=B.split(':').map(Number);
+  let d=(bh*60+bm)-(ah*60+am); if(d<=0) d+=1440;
+  return Math.round((d/60)*10)/10;
+}
+function addDay(dateStr){ const d=new Date(dateStr+'T12:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); }
+/* DST-safe RFC3339 for America/New_York */
+function isoNY(dateStr, timeStr){
+  const t=to24(timeStr); if(!dateStr||!t) return null;
+  const naive=new Date(`${dateStr}T${t}:00`);
+  const nyc=new Date(naive.toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const offMs=naive.getTime()-nyc.getTime();
+  const sign=offMs>=0?'-':'+';
+  const hrs=Math.round(Math.abs(offMs)/36e5);
+  return `${dateStr}T${t}:00${sign}${String(hrs).padStart(2,'0')}:00`;
+}
+
+/* ---- map a hub inquiry row onto portal state ---- */
+function mapInquiry(inq){
+  const st = Portal._fresh();
+  const name=[inq.firstName,inq.lastName].filter(Boolean).join(' ').trim();
+  st.deal.ref = inq.refId || st.deal.ref;
+  st.client.name = name;
+  st.client.company = inq.company || '';
+  st.client.email = inq.email || '';
+  st.event.name = inq.eventType || '';
+  st.event.date = inq.eventDate || '';
+  const g = parseInt(inq.guestCount,10);
+  if(!isNaN(g) && g>0){
+    st.event.guests = g;
+    st.venue.tier = g<=150 ? 't150' : (g<=250 ? 't250' : 't350');
+  }
+  const hrs = hoursBetween(inq.doorsOpen, inq.doorsClose);
+  if(hrs){ st.event.hours = hrs; st.event.staffHours = Math.round(hrs)+1; }
+  if(inq.doorsOpen)  st.contract.admissionOpen  = pretty(inq.doorsOpen);
+  if(inq.doorsClose) st.contract.admissionClose = pretty(inq.doorsClose);
+  if(inq.doorsOpen)  st.contract.accessFrom     = pretty(inq.doorsOpen);
+  if(inq.doorsClose) st.contract.accessUntil    = pretty(inq.doorsClose);
+  if(inq.eventDate)  st.contract.insuranceDate  = (()=>{ const d=new Date(inq.eventDate+'T12:00:00'); d.setDate(d.getDate()-7); return d.toISOString().slice(0,10); })();
+  st.invoice.number = 'INV-' + (inq.refId||'');
+  return st;
+}
+
+/* ---- payload builders ---- */
+function quoteDataJson(){
+  const S=Portal._S(), t=Portal._quoteTotals();
+  return JSON.stringify({
+    grandTotal: t.grand,
+    deposit: t.deposit,
+    depType: (S.adj.depositCredited===false) ? 'refundable' : 'credited',
+    netConfirmed: t.netConfirmed,
+    venueTotal: t.venueTotal, equipTotal: t.equipTotal, staffTotal: t.staffTotal,
+    portalState: S,
+  });
+}
+function invoiceDataJson(){
+  const S=Portal._S(), t=Portal._invoiceTotals();
+  return JSON.stringify({
+    number:S.invoice.number, date:S.invoice.date,
+    items:S.invoice.items, payments:S.invoice.payments,
+    total:t.items, paid:t.paid, balance:t.balance,
+  });
+}
+
+/* ---- PDF from plain text (jsPDF) ---- */
+function pdfBase64(title, text){
+  if(!window.jspdf || !window.jspdf.jsPDF) throw new Error('jsPDF not loaded');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'letter'});
+  const M=54, W=doc.internal.pageSize.getWidth()-M*2, H=doc.internal.pageSize.getHeight()-M;
+  let y=M;
+  doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text(title, M, y); y+=22;
+  doc.setFont('courier','normal'); doc.setFontSize(9);
+  text.split('\n').forEach(line=>{
+    const wrapped = doc.splitTextToSize(line||' ', W);
+    wrapped.forEach(w=>{
+      if(y>H-20){ doc.addPage(); y=M; }
+      doc.text(w, M, y); y+=12;
+    });
+  });
+  return doc.output('datauristring').split(',')[1];
+}
+
+/* ---- Google Calendar ---- */
+async function createHold(){
+  const S=Portal._S(), t=Portal._quoteTotals(), inq=ctx.inquiry||{};
+  if(!S.event.date) throw new Error('Set an event date before creating a hold.');
+  const name=S.client.name||[inq.firstName,inq.lastName].filter(Boolean).join(' ');
+  const body={
+    summary:`HOLD — ${name}`,
+    description:`${S.event.name||'Event'} · ${S.event.guests||'?'} guests\nQuote: $${t.grand.toLocaleString('en-US')}\nRef: ${S.deal.ref}\n\nBooked via Carriage House Portal`,
+    start:{date:S.event.date}, end:{date:S.event.date},
+    status:'tentative', transparency:'opaque',
+  };
+  const r=await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events`,{
+    method:'POST', headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error('Calendar: '+(e.error?.message||r.status)); }
+  return r.json();
+}
+async function patchHold(){
+  const S=Portal._S();
+  const eventId=ctx.calendarEventId;
+  if(!eventId) throw new Error('No calendar hold exists yet. Email the quote first to create one.');
+  const date=S.event.date;
+  if(!date) throw new Error('Set an event date first.');
+  const startT=S.contract.accessFrom || S.contract.admissionOpen;
+  const endT  =S.contract.accessUntil || S.contract.vacateTime;
+  const startISO=isoNY(date,startT);
+  let endDate=date;
+  const s24=to24(startT), e24=to24(endT);
+  if(s24 && e24 && e24<=s24) endDate=addDay(date);
+  const endISO=isoNY(endDate,endT);
+  if(!startISO||!endISO) throw new Error('Could not read access times. Use a format like "5:00 PM".');
+  const x=Portal._contractCtx();
+  const description=[
+    `Client: ${S.client.name||'TBD'}`,
+    `Event: ${S.event.name||'Private Event'}`,
+    S.event.guests?`Guests: up to ${S.event.guests}`:null,
+    `Total: $${x.total.toLocaleString('en-US')}`,
+    '',
+    `Doors open:  ${S.contract.admissionOpen||'—'}`,
+    `Doors close: ${S.contract.admissionClose||'—'}`,
+    '',
+    'Updated via Carriage House Portal',
+  ].filter(l=>l!==null).join('\n');
+  const r=await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`,{
+    method:'PATCH', headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      summary:`${S.client.name||'Client'} — ${S.event.name||'Private Event'}`,
+      description,
+      start:{dateTime:startISO,timeZone:'America/New_York'},
+      end:{dateTime:endISO,timeZone:'America/New_York'},
+    })});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error('Calendar: '+(e.error?.message||r.status)); }
+  return r.json();
+}
+
+/* ---- Gmail draft ---- */
+function emailShell(inner){
+  return `<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;color:#0f0f12">
+  <div style="background:#1a1a2e;padding:28px 32px;margin-bottom:24px">
+    <div style="font-size:18px;color:#fff;letter-spacing:.03em">170 Eldridge LLC</div>
+    <div style="font-size:11px;color:#c9a84c;margin-top:4px;letter-spacing:.1em;text-transform:uppercase">Carriage House</div>
+  </div>
+  <div style="padding:0 8px">${inner}
+    <div style="border-top:1px solid #e2e2ea;padding-top:16px;margin-top:24px;font-size:12px;color:#6b6b7e">
+      <strong style="color:#0f0f12">Carriage House</strong><br>170 Eldridge Street, New York, NY 10002<br>
+      <a href="https://carriagehouse.nyc" style="color:#0f3460">carriagehouse.nyc</a>
+    </div>
+  </div></div>`;
+}
+async function gmailDraft(to, subject, html, fileName, base64){
+  if(!to) throw new Error('No client email on this inquiry.');
+  const b='b_170e_'+Date.now();
+  const lines=[
+    'MIME-Version: 1.0',
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `Content-Type: multipart/mixed; boundary="${b}"`,'',
+    `--${b}`,'Content-Type: text/html; charset="UTF-8"','',html,'',
+    `--${b}`,`Content-Type: application/pdf; name="${fileName}"`,
+    'Content-Transfer-Encoding: base64',
+    `Content-Disposition: attachment; filename="${fileName}"`,'',base64,'',
+    `--${b}--`,
+  ].join('\r\n');
+  const raw=btoa(unescape(encodeURIComponent(lines))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts',{
+    method:'POST', headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},
+    body:JSON.stringify({message:{raw}})});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error('Gmail: '+(e.error?.message||r.status)); }
+  return r.json();
+}
+function longDate(d){ return d? new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : 'your event date'; }
+
+/* ---- handoff to hub ---- */
+function handoff(key, payload){
+  sessionStorage.setItem(key, JSON.stringify(payload));
+  const p=prefill()||{};
+  p.portalState=Portal._S();
+  p.calendarEventId=ctx.calendarEventId||'';
+  sessionStorage.setItem('170e_prefill', JSON.stringify(p));
+  window.location.href='index.html';
+}
+function requireHub(){ if(!ctx.active){ alert('Open this from the hub to save to the Sheet.'); return false; } return true; }
+
+/* ---- actions ---- */
+async function saveQuote(withEmail){
+  if(!requireHub()) return;
+  const S=Portal._S();
+  let calendarEventId=ctx.calendarEventId||'';
+  if(withEmail){
+    if(!token()){ alert('Not signed in. Return to the hub and sign in.'); return; }
+    busy('Creating hold & drafting email…');
+    try{
+      const t=Portal._quoteTotals();
+      const [cal]=await Promise.all([
+        calendarEventId?Promise.resolve({id:calendarEventId}):createHold(),
+        gmailDraft(
+          S.client.email,
+          `Carriage House — Quote for ${S.event.name||'Your Event'} on ${longDate(S.event.date)}`,
+          emailShell(`<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
+            <p style="margin:0 0 16px">Thank you for your interest in Carriage House. Your quote for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong> is attached.</p>
+            <div style="background:#f7f7fa;border:1px solid #e2e2ea;border-radius:6px;padding:16px 20px;margin:0 0 16px">
+              <div style="font-size:11px;font-weight:600;color:#6b6b7e;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">Quote Summary</div>
+              <div style="font-size:14px;margin-bottom:6px">Guests: <strong>${esc(S.event.guests||'—')}</strong></div>
+              <div style="font-size:16px;border-top:1px solid #e2e2ea;padding-top:10px;margin-top:10px">Total: <strong>$${t.grand.toLocaleString('en-US')}</strong></div>
+            </div>
+            <p style="margin:0 0 16px">Happy to walk through the details or adjust anything to better fit your plans.</p>
+            <p style="margin:0 0 4px">Best,</p>`),
+          `170_Eldridge_Quote_${(S.client.name||'Client').replace(/\s+/g,'_')}.pdf`,
+          pdfBase64('Carriage House — Event Quote', Portal._quoteText())
+        ),
+      ]);
+      if(cal&&cal.id) calendarEventId=cal.id;
+    }catch(err){ busy(''); alert('Quote will still be saved, but: '+err.message); }
+    busy('');
+  }
+  handoff('170e_quote_result',{
+    rowIndex:ctx.rowIndex, refId:ctx.refId,
+    grandTotal:Portal._quoteTotals().grand,
+    quoteDataJson:quoteDataJson(),
+    calendarEventId,
+  });
+}
+async function saveContract(withEmail){
+  if(!requireHub()) return;
+  const S=Portal._S();
+  if(withEmail){
+    if(!token()){ alert('Not signed in. Return to the hub and sign in.'); return; }
+    busy('Updating hold & drafting email…');
+    try{
+      await patchHold();
+      const x=Portal._contractCtx();
+      await gmailDraft(
+        S.client.email,
+        `Carriage House — Rental Agreement for ${S.event.name||'Your Event'}`,
+        emailShell(`<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
+          <p style="margin:0 0 16px">Attached is the venue rental agreement for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong>.</p>
+          <div style="background:#f7f7fa;border:1px solid #e2e2ea;border-radius:6px;padding:16px 20px;margin:0 0 16px">
+            <div style="font-size:14px;margin-bottom:6px">Total: <strong>$${x.total.toLocaleString('en-US')}</strong></div>
+            <div style="font-size:14px">Security deposit: <strong>$${x.deposit.toLocaleString('en-US')}</strong> ${x.credited?'(credited to total)':'(refundable)'}</div>
+          </div>
+          <p style="margin:0 0 16px">Please review, sign, and return at your convenience. The deposit is due on signing to confirm the date.</p>
+          <p style="margin:0 0 4px">Best,</p>`),
+        `170_Eldridge_Agreement_${(S.client.name||'Client').replace(/\s+/g,'_')}.pdf`,
+        pdfBase64('Venue Rental Agreement', Portal._contractText())
+      );
+    }catch(err){ busy(''); alert('Contract will still be saved, but: '+err.message); }
+    busy('');
+  }
+  handoff('170e_contract_result',{ rowIndex:ctx.rowIndex, refId:ctx.refId, quoteDataJson:quoteDataJson() });
+}
+function saveInvoice(){
+  if(!requireHub()) return;
+  const t=Portal._invoiceTotals();
+  handoff('170e_invoice_result',{
+    rowIndex:ctx.rowIndex, refId:ctx.refId,
+    invoiceTotal:t.items, invoiceDataJson:invoiceDataJson(), quoteDataJson:quoteDataJson(),
+  });
+}
+function backToHub(){ 
+  const p=prefill(); 
+  if(p){ p.portalState=Portal._S(); sessionStorage.setItem('170e_prefill',JSON.stringify(p)); }
+  window.location.href='index.html';
+}
+
+/* ---- UI ---- */
+let busyMsg='';
+function busy(m){ busyMsg=m; renderBar(); }
+function renderBar(){
+  const bar=gid('hubbar'); if(!bar) return;
+  if(!ctx.active){ bar.innerHTML=''; return; }
+  const stage=Portal._S().stage;
+  if(busyMsg){ bar.innerHTML=`<span class="ref-chip">${esc(busyMsg)}</span>`; return; }
+  let btns=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>`;
+  if(stage==='quote'){
+    btns+=`<button class="io-btn" onclick="Hub.saveQuote(false)">Save to Hub</button>
+           <button class="io-btn" onclick="Hub.saveQuote(true)">Email quote + hold</button>`;
+  } else if(stage==='contract'){
+    btns+=`<button class="io-btn" onclick="Hub.saveContract(false)">Save contract</button>
+           <button class="io-btn" onclick="Hub.saveContract(true)">Email contract + update hold</button>`;
+  } else {
+    btns+=`<button class="io-btn" onclick="Hub.saveInvoice()">Save invoice to Hub</button>`;
+  }
+  const u=user();
+  bar.innerHTML=btns+(u?`<span class="ref-chip" title="Signed in">${esc(u)}</span>`:'');
+}
+
+/* ---- start ---- */
+function start(){
+  const p=prefill();
+  if(!p || p.source!=='hub'){ Portal._init(); renderBar(); return; }
+  ctx={active:true, rowIndex:p.rowIndex, refId:p.refId||'', token:p.token||'',
+       calendarEventId:p.calendarEventId||'', inquiry:p.inquiry||{}};
+  if(p.token) sessionStorage.setItem('170e_token', p.token);
+
+  const saved = p.portalState || (p.quote && p.quote.portalState) || null;
+  let state = saved ? saved : mapInquiry(ctx.inquiry);
+  // Deep-merge a saved invoice from the Sheet if the portal state predates it
+  if(!saved && p.invoice && p.invoice.items){
+    state.invoice = Object.assign(state.invoice, {
+      number:p.invoice.number||state.invoice.number, date:p.invoice.date||state.invoice.date,
+      items:p.invoice.items||[], payments:p.invoice.payments||[], pulled:true,
+    });
+  }
+  state.deal.ref = ctx.refId || state.deal.ref;
+  Portal._load(state);
+  if(p.stage) Portal.go(p.stage);
+  renderBar();
+}
+
+// keep the bar in sync when the user switches stages
+const _go = Portal.go;
+Portal.go = function(s){ _go(s); renderBar(); };
+
+return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY };
+})();
+window.Hub = Hub;
+Hub.start();
+
+
+</script>
+</body>
+</html>

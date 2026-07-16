@@ -14,6 +14,7 @@
   --new-bg:#eff6ff;--new-border:#bfdbfe;--new-text:#1e40af;
   --quoted-bg:#fef9ec;--quoted-border:#f5d97a;--quoted-text:#7a5c00;
   --contracted-bg:#edfaf3;--contracted-border:#a3ddc0;--contracted-text:#1a6b42;
+  --invoiced-bg:#f3f0fb;--invoiced-border:#c3b6e6;--invoiced-text:#553a95;
   --cancelled-bg:#f5f5f5;--cancelled-border:#ddd;--cancelled-text:#888;
 }
 html{font-size:15px}
@@ -55,7 +56,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
 .btn-new-inq:hover{opacity:.85}
 
 /* ── PIPELINE BOARD ── */
-.board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:start}
+@media(max-width:1100px){.board{grid-template-columns:repeat(2,1fr)}}
 .col{background:rgba(0,0,0,.02);border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .col-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .col-title{font-size:.82rem;font-weight:500;color:var(--ink2);letter-spacing:.01em}
@@ -63,6 +65,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
 .col-head.col-new .col-cnt{background:var(--new-bg);color:var(--new-text);border:1px solid var(--new-border)}
 .col-head.col-quoted .col-cnt{background:var(--quoted-bg);color:var(--quoted-text);border:1px solid var(--quoted-border)}
 .col-head.col-contracted .col-cnt{background:var(--contracted-bg);color:var(--contracted-text);border:1px solid var(--contracted-border)}
+.col-head.col-invoiced .col-cnt{background:var(--invoiced-bg);color:var(--invoiced-text);border:1px solid var(--invoiced-border)}
 .cards-wrap{padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px}
 .empty-col{font-size:.78rem;color:var(--muted);text-align:center;padding:24px 0;font-family:'DM Mono',monospace}
 
@@ -88,6 +91,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
 .d-status-badge.new{background:var(--new-bg);color:var(--new-text)}
 .d-status-badge.quoted{background:var(--quoted-bg);color:var(--quoted-text)}
 .d-status-badge.contracted{background:var(--contracted-bg);color:var(--contracted-text)}
+.d-status-badge.invoiced{background:var(--invoiced-bg);color:var(--invoiced-text)}
 .d-status-badge.cancelled{background:var(--cancelled-bg);color:var(--cancelled-text)}
 .detail-close{width:32px;height:32px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;line-height:1}
 .detail-close:hover{background:rgba(255,255,255,.1);color:#fff}
@@ -270,6 +274,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
         </div>
         <div class="cards-wrap" id="cards-contracted"><div class="empty-col">—</div></div>
       </div>
+      <div class="col">
+        <div class="col-head col-invoiced">
+          <span class="col-title">Invoiced</span>
+          <span class="col-cnt" id="cnt-invoiced">0</span>
+        </div>
+        <div class="cards-wrap" id="cards-invoiced"><div class="empty-col">—</div></div>
+      </div>
     </div>
   </div>
 
@@ -296,6 +307,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
             <option value="new">New</option>
             <option value="quoted">Quoted</option>
             <option value="contracted">Contracted</option>
+            <option value="invoiced">Invoiced</option>
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
@@ -305,8 +317,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
           <button class="followup-clear-btn" onclick="clearFollowup()" title="Clear">✕</button>
         </div>
         <div class="detail-action-row">
-          <button class="action-btn secondary" onclick="goToQuote()">Build Quote →</button>
-          <button class="action-btn primary" onclick="goToContract()">Build Contract →</button>
+          <button class="action-btn secondary" onclick="goToPortal('quote')">Quote →</button>
+          <button class="action-btn secondary" onclick="goToPortal('contract')">Contract →</button>
+          <button class="action-btn primary" onclick="goToPortal('invoice')">Invoice →</button>
         </div>
       </div>
     </div>
@@ -340,6 +353,7 @@ const COL = {
   alcohol:19, ageReq:20, insurance:21, budget:22, payMethod:23, notes:24,
   // Hub-managed columns (written by this dashboard):
   status:25, quoteTotal:26, quoteData:27, contractGenerated:28, lastUpdatedBy:29, calendarEventId:30,
+  invoiceData:31, invoiceTotal:32,
 };
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -430,7 +444,7 @@ async function loadInquiries() {
   setLoading(true);
   clearError();
   try {
-    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AE`);
+    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AG`);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}`;
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
@@ -499,6 +513,8 @@ function parseRow(row, rowIndex) {
     contractGenerated: row[COL.contractGenerated] || '',
     lastUpdatedBy:   row[COL.lastUpdatedBy]    || '',
     calendarEventId: row[COL.calendarEventId]  || '',
+    invoiceData:     safeJson(row[COL.invoiceData]),
+    invoiceTotal:    row[COL.invoiceTotal]     || '',
   };
 }
 
@@ -509,9 +525,25 @@ function colLetter(idx) {
   return String.fromCharCode(64 + Math.floor(idx / 26)) + String.fromCharCode(65 + (idx % 26));
 }
 
+// Build the full Z..AG hub-managed value array, preserving anything not overridden.
+function rowValues(inq, o) {
+  o = o || {};
+  const pick = (k, fallback) => (o[k] !== undefined && o[k] !== null) ? o[k] : fallback;
+  return [
+    pick('status',            inq?.status            || 'new'),
+    pick('quoteTotal',        inq?.quoteTotal        || ''),
+    pick('quoteDataJson',     inq?.quoteData ? JSON.stringify(inq.quoteData) : ''),
+    pick('contractGenerated', inq?.contractGenerated || ''),
+    currentUserEmail,
+    pick('calendarEventId',   inq?.calendarEventId   || ''),
+    pick('invoiceDataJson',   inq?.invoiceData ? JSON.stringify(inq.invoiceData) : ''),
+    pick('invoiceTotal',      inq?.invoiceTotal      || ''),
+  ];
+}
+
 async function writeRow(rowIndex, values) {
   const startLetter = colLetter(COL.status);          // Z
-  const endLetter   = colLetter(COL.calendarEventId);  // AE
+  const endLetter   = colLetter(COL.invoiceTotal);     // AG
   const range = encodeURIComponent(`${CONFIG.TAB}!${startLetter}${rowIndex}:${endLetter}${rowIndex}`);
   const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
 
@@ -531,23 +563,34 @@ function processPendingWrites() {
   // These get written to sheet once auth is re-established (in flushPendingWrites)
   const q = sessionStorage.getItem('170e_quote_result');
   const c = sessionStorage.getItem('170e_contract_result');
+  const v = sessionStorage.getItem('170e_invoice_result');
   if (q) sessionStorage.setItem('170e_pending_quote', q);
   if (c) sessionStorage.setItem('170e_pending_contract', c);
+  if (v) sessionStorage.setItem('170e_pending_invoice', v);
   sessionStorage.removeItem('170e_quote_result');
   sessionStorage.removeItem('170e_contract_result');
+  sessionStorage.removeItem('170e_invoice_result');
 }
 
 async function flushPendingWrites() {
   const pq = sessionStorage.getItem('170e_pending_quote');
   if (pq && accessToken) {
     const { rowIndex, refId, grandTotal, quoteDataJson, calendarEventId } = JSON.parse(pq);
-    const ok = await writeRow(rowIndex, ['quoted', grandTotal, quoteDataJson, '', currentUserEmail, calendarEventId || '']);
+    const inqQ = inquiries.find(i => i.rowIndex === rowIndex || i.refId === refId);
+    // Never demote a contracted/invoiced deal back to 'quoted' when re-saving a quote.
+    const keepStatus = ['contracted','invoiced'].includes(inqQ?.status) ? inqQ.status : 'quoted';
+    const ok = await writeRow(rowIndex, rowValues(inqQ, {
+      status: keepStatus,
+      quoteTotal: grandTotal,
+      quoteDataJson,
+      calendarEventId: calendarEventId || (inqQ?.calendarEventId || ''),
+    }));
     if (ok) {
       sessionStorage.removeItem('170e_pending_quote');
       // Update in-memory
-      const inq = inquiries.find(i => i.rowIndex === rowIndex || i.refId === refId);
+      const inq = inqQ;
       if (inq) {
-        inq.status = 'quoted';
+        inq.status = keepStatus;
         inq.quoteTotal = String(grandTotal);
         inq.quoteData = safeJson(quoteDataJson);
         if (calendarEventId) inq.calendarEventId = calendarEventId;
@@ -557,15 +600,44 @@ async function flushPendingWrites() {
   }
   const pc = sessionStorage.getItem('170e_pending_contract');
   if (pc && accessToken) {
-    const { rowIndex, refId } = JSON.parse(pc);
+    const { rowIndex, refId, quoteDataJson } = JSON.parse(pc);
     const inq = inquiries.find(i => i.rowIndex === rowIndex || i.refId === refId);
-    const qt = inq?.quoteTotal || '';
-    const qd = inq?.quoteData ? JSON.stringify(inq.quoteData) : '';
-    const ok = await writeRow(rowIndex, ['contracted', qt, qd, 'true', currentUserEmail, inq?.calendarEventId || '']);
+    const keep = inq?.status === 'invoiced' ? 'invoiced' : 'contracted';
+    const ok = await writeRow(rowIndex, rowValues(inq, {
+      status: keep,
+      contractGenerated: 'true',
+      ...(quoteDataJson ? { quoteDataJson } : {}),
+    }));
     if (ok) {
       sessionStorage.removeItem('170e_pending_contract');
-      if (inq) { inq.status = 'contracted'; inq.contractGenerated = 'true'; }
-      showToast('Contract generated ✓');
+      if (inq) {
+        inq.status = keep;
+        inq.contractGenerated = 'true';
+        if (quoteDataJson) inq.quoteData = safeJson(quoteDataJson);
+      }
+      showToast('Contract saved ✓');
+    }
+  }
+
+  const pv = sessionStorage.getItem('170e_pending_invoice');
+  if (pv && accessToken) {
+    const { rowIndex, refId, invoiceTotal, invoiceDataJson, quoteDataJson } = JSON.parse(pv);
+    const inq = inquiries.find(i => i.rowIndex === rowIndex || i.refId === refId);
+    const ok = await writeRow(rowIndex, rowValues(inq, {
+      status: 'invoiced',
+      invoiceTotal,
+      invoiceDataJson,
+      ...(quoteDataJson ? { quoteDataJson } : {}),
+    }));
+    if (ok) {
+      sessionStorage.removeItem('170e_pending_invoice');
+      if (inq) {
+        inq.status = 'invoiced';
+        inq.invoiceTotal = String(invoiceTotal);
+        inq.invoiceData = safeJson(invoiceDataJson);
+        if (quoteDataJson) inq.quoteData = safeJson(quoteDataJson);
+      }
+      showToast('Invoice saved ✓');
     }
   }
 }
@@ -573,7 +645,7 @@ async function flushPendingWrites() {
 // ── RENDER BOARD ─────────────────────────────────────────────────────
 
 function renderBoard() {
-  const buckets = { new: [], quoted: [], contracted: [] };
+  const buckets = { new: [], quoted: [], contracted: [], invoiced: [] };
   inquiries.forEach(inq => {
     const s = inq.status || 'new';
     if (buckets[s]) buckets[s].push(inq);
@@ -585,7 +657,7 @@ function renderBoard() {
     buckets[k] = sortInquiries(buckets[k]);
   });
 
-  ['new', 'quoted', 'contracted'].forEach(status => {
+  ['new', 'quoted', 'contracted', 'invoiced'].forEach(status => {
     const container = document.getElementById('cards-' + status);
     const cnt       = document.getElementById('cnt-' + status);
     cnt.textContent = buckets[status].length;
@@ -755,14 +827,7 @@ async function changeStatus() {
   const inq = inquiries.find(i => i.refId === selected.refId);
   if (!inq) return;
 
-  const ok = await writeRow(inq.rowIndex, [
-    newStatus,
-    inq.quoteTotal || '',
-    inq.quoteData ? JSON.stringify(inq.quoteData) : '',
-    inq.contractGenerated || '',
-    currentUserEmail,
-    inq.calendarEventId || '',
-  ]);
+  const ok = await writeRow(inq.rowIndex, rowValues(inq, { status: newStatus }));
 
   if (ok) {
     inq.status = newStatus;
@@ -777,36 +842,31 @@ async function changeStatus() {
 
 // ── NAVIGATION TO TOOLS ──────────────────────────────────────────────
 
-function goToQuote() {
-  if (!selected) return;
-  sessionStorage.setItem('170e_prefill', JSON.stringify({
-    source: 'hub',
-    refId: selected.refId,
-    rowIndex: selected.rowIndex,
-    inquiry: selected,
-    token: accessToken,
-  }));
-  window.location.href = 'quote.html';
-}
-
-function goToContract() {
+function goToPortal(stage) {
   if (!selected) return;
   const existing = sessionStorage.getItem('170e_prefill');
-  let contractState = null;
+  let carried = null;
   if (existing) {
-    try { contractState = JSON.parse(existing).contractState || null; } catch {}
+    try {
+      const p = JSON.parse(existing);
+      if (p.refId === selected.refId) carried = p.portalState || null;
+    } catch {}
   }
   sessionStorage.setItem('170e_prefill', JSON.stringify({
     source: 'hub',
+    stage: stage || 'quote',
     refId: selected.refId,
     rowIndex: selected.rowIndex,
     inquiry: selected,
-    quote: selected.quoteData,
+    quote: selected.quoteData || null,
+    invoice: selected.invoiceData || null,
     token: accessToken,
-    contractState,
     calendarEventId: selected.calendarEventId || '',
+    portalState: carried,
   }));
-  window.location.href = 'contract.html';
+  if (accessToken) sessionStorage.setItem('170e_token', accessToken);
+  if (currentUserEmail) sessionStorage.setItem('170e_user', currentUserEmail);
+  window.location.href = 'portal.html';
 }
 
 // ── UTILITIES ─────────────────────────────────────────────────────────
@@ -1017,7 +1077,8 @@ function renderReminderBanner() {
 
 function renderStats() {
   const active      = inquiries.filter(i => i.status !== 'cancelled');
-  const contracted  = active.filter(i => i.status === 'contracted');
+  // 'invoiced' is a won deal too -- keep it counted in contracted value & conversion.
+  const contracted  = active.filter(i => i.status === 'contracted' || i.status === 'invoiced');
   const quoted      = active.filter(i => i.status === 'quoted');
   const withQuote   = [...quoted, ...contracted];
 
