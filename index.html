@@ -42,10 +42,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .btn-gsi:hover{opacity:.92;border-color:var(--amber-dim)}
 .btn-gsi svg{flex-shrink:0}
 .auth-error{margin-top:16px;font-size:.8rem;color:var(--red);background:var(--red-soft);border:1px solid rgba(211,118,91,.35);border-radius:5px;padding:8px 12px;display:none}
-.setup-note{margin-top:20px;font-size:.72rem;color:var(--muted);line-height:1.7;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:12px;text-align:left}
-.setup-note a{color:var(--amber);text-decoration:none}
-.setup-note a:hover{text-decoration:underline}
-.setup-note code{font-family:var(--mono);font-size:.92em;background:var(--surface-3);color:var(--amber);padding:1px 5px;border-radius:3px}
 
 /* ── HEADER ── */
 .site-header{background:rgba(14,13,10,.94);backdrop-filter:blur(10px);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--line)}
@@ -135,6 +131,9 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .status-select{font-family:var(--body);font-size:.82rem;color:var(--ink);background:var(--surface-3);border:1px solid var(--line-2);border-radius:5px;padding:7px 10px;flex:1;cursor:pointer;outline:none;transition:border-color .15s}
 .status-select:focus{border-color:var(--amber-dim)}
 .detail-action-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.no-date-btn{width:100%;margin-bottom:8px;font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;font-weight:400;padding:10px 12px;border-radius:6px;cursor:pointer;transition:all .15s;text-align:center;border:1px solid var(--line-2);background:var(--surface-3);color:var(--muted)}
+.no-date-btn:hover{border-color:var(--red);color:var(--red);background:var(--red-soft)}
+.no-date-btn:disabled{opacity:.5;cursor:not-allowed}
 .action-btn{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;font-weight:400;padding:10px 12px;border-radius:6px;cursor:pointer;transition:all .15s;text-align:center;border:1px solid}
 .action-btn.secondary{background:var(--surface-3);border-color:var(--line-2);color:var(--ink2)}
 .action-btn.secondary:hover{border-color:var(--amber-dim);color:var(--amber);background:var(--amber-soft)}
@@ -225,9 +224,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
       Sign in with Google
     </button>
     <div class="auth-error" id="auth-error"></div>
-    <div class="setup-note">
-      <strong>First time?</strong> You'll need a Google Cloud project with the Sheets API enabled and an OAuth Client ID configured for this page's URL. See <a href="README.md" target="_blank">README.md</a> for setup steps, or edit the <code>CONFIG.CLIENT_ID</code> at the top of this file's script.
-    </div>
   </div>
 </div>
 
@@ -363,6 +359,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
           <input type="date" class="followup-date-input" id="followup-date" onchange="saveFollowup()">
           <button class="followup-clear-btn" onclick="clearFollowup()" title="Clear">✕</button>
         </div>
+        <button class="no-date-btn" id="no-date-btn" onclick="sendNoDateFromHub()" style="display:none">Date not available</button>
         <div class="detail-action-row">
           <button class="action-btn secondary" onclick="goToPortal('quote')">Quote →</button>
           <button class="action-btn secondary" onclick="goToPortal('contract')">Contract →</button>
@@ -829,6 +826,12 @@ function openDetail(refId) {
   const fuInput = document.getElementById('followup-date');
   fuInput.value = followups[selected.refId] || '';
 
+  // "Date not available" only makes sense before a date is locked in by
+  // contract, and only when there's an actual requested date to reference.
+  const noDateBtn = document.getElementById('no-date-btn');
+  const canOfferNoDate = ['new', 'quoted'].includes(selected.status || 'new') && !!selected.eventDate;
+  noDateBtn.style.display = canOfferNoDate ? '' : 'none';
+
   document.getElementById('detail-body').innerHTML = renderDetailBody(selected);
   document.getElementById('detail-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -1003,6 +1006,73 @@ function safeJson(str) {
 function escHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function longDate(s) {
+  if (!s) return 'your requested date';
+  return new Date(s + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+}
+
+// RFC 2047 encoded-word: MIME headers must stay 7-bit ASCII. Non-ASCII
+// values (accented names, punctuation) need this or they render as
+// mojibake in the client. Mirrors the same helper in portal.html.
+function encodeMimeHeader(str){
+  if(/^[\x00-\x7F]*$/.test(str)) return str;
+  return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(str))) + '?=';
+}
+
+function emailShell(innerHtml){
+  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;color:#1a1816">
+  <div style="background:#0e0d0a;padding:32px 36px;margin-bottom:24px">
+    <div style="font-family:'Arial Narrow',Arial,Helvetica,sans-serif;font-weight:700;font-size:22px;letter-spacing:.08em;text-transform:uppercase;color:#f2ede1">Carriage House</div>
+  </div>
+  <div style="padding:0 8px">${innerHtml}
+    <div style="border-top:1px solid #e6e2d6;padding-top:16px;margin-top:24px;font-size:12px;color:#6b6353">
+      <strong style="color:#1a1816">Carriage House</strong><br>170 Eldridge Street, New York, NY 10002<br>
+      <a href="https://carriagehouse.nyc" style="color:#a87524">carriagehouse.nyc</a>
+    </div>
+  </div></div>`;
+}
+
+async function gmailDraft(to, subject, html){
+  if(!to) throw new Error('No client email on this inquiry.');
+  const lines=[
+    'MIME-Version: 1.0',
+    `To: ${to}`,
+    `Subject: ${encodeMimeHeader(subject)}`,
+    'Content-Type: text/html; charset="UTF-8"','',
+    html,
+  ].join('\r\n');
+  const raw=btoa(unescape(encodeURIComponent(lines))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts',{
+    method:'POST', headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({message:{raw}})});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error('Gmail: '+(e.error?.message||r.status)); }
+  return r.json();
+}
+
+async function sendNoDateFromHub(){
+  if(!selected) return;
+  if(!selected.email){ alert('No client email on this inquiry.'); return; }
+  if(!accessToken){ alert('Not signed in.'); return; }
+  const btn = document.getElementById('no-date-btn');
+  btn.disabled = true; btn.textContent = 'Drafting…';
+  try{
+    const firstName = selected.firstName || 'there';
+    const eventType = selected.eventType || 'your event';
+    const html = emailShell(`
+      <p style="margin:0 0 16px">Hi ${escHtml(firstName)},</p>
+      <p style="margin:0 0 16px">Unfortunately <strong>${longDate(selected.eventDate)}</strong> is no longer available for <strong>${escHtml(eventType)}</strong>.</p>
+      <p style="margin:0 0 16px">We'd love to find another date that works. Let me know what flexibility you have and I'll check what's open.</p>
+      <p style="margin:0 0 4px">Best,</p>
+      <p style="margin:0 0 4px">Lucas</p>
+      <p style="margin:0">(978) 879-3364</p>`);
+    await gmailDraft(selected.email, 'Carriage House: About your requested date', html);
+    showToast('Draft created');
+  }catch(err){
+    alert('Could not create draft: '+err.message);
+  }
+  btn.disabled = false; btn.textContent = 'Date not available';
 }
 
 function setLoading(show) {
