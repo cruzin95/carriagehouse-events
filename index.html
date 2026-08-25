@@ -1215,7 +1215,17 @@ function renderReminderBanner() {
 // ── STATS ────────────────────────────────────────────────────────────
 
 function renderStats() {
-  const active      = inquiries.filter(i => !['stale', 'dead', 'cancelled'].includes(i.status));
+  // Test entries never feed into any of these numbers. Matches "test" as a
+  // whole word or word-start (test, Test, testing, tester) across the
+  // fields someone would actually type into while testing the system --
+  // deliberately NOT a plain substring match, so a real "Contest" or
+  // "Protest" entry doesn't get silently dropped from the numbers too.
+  const TEST_RE = /\btest/i;
+  const looksLikeTest = i => [i.firstName, i.lastName, i.email, i.company, i.eventType, i.notes]
+    .some(v => v && TEST_RE.test(String(v)));
+  const realInquiries = inquiries.filter(i => !looksLikeTest(i));
+
+  const active      = realInquiries.filter(i => !['stale', 'dead', 'cancelled'].includes(i.status));
   // 'invoiced' is a won deal too -- keep it counted in contracted value & conversion.
   const contracted  = active.filter(i => i.status === 'contracted' || i.status === 'invoiced');
   const quoted      = active.filter(i => i.status === 'quoted');
@@ -1223,8 +1233,21 @@ function renderStats() {
 
   const pipelineVal    = withQuote.reduce((s, i) => s + (parseFloat(i.quoteTotal) || 0), 0);
   const contractedVal  = contracted.reduce((s, i) => s + (parseFloat(i.quoteTotal) || 0), 0);
-  const convRate       = active.length ? Math.round((contracted.length / active.length) * 100) : 0;
-  const starred        = Object.keys(starredIds).filter(id => starredIds[id] && inquiries.some(i => i.refId === id)).length;
+  // Close rate = of everyone who actually got a quote, how many closed.
+  // Deliberately excludes 'new' leads that haven't been quoted yet -- an
+  // unprocessed inquiry isn't a failed conversion, it just hasn't had a
+  // chance yet, and including it only waters the number down.
+  //
+  // Stale/dead/cancelled deals DO count here, but only if they'd actually
+  // been quoted first (a real quoteTotal on record). A quoted deal that
+  // later went cold is a genuine loss and should count against the rate;
+  // a lead that went stale/dead before ever getting a quote isn't a lost
+  // deal, it just never got that far, so it's excluded either way.
+  const wasQuoted = i => parseFloat(i.quoteTotal) > 0;
+  const lostAfterQuote = realInquiries.filter(i => ['stale', 'dead', 'cancelled'].includes(i.status) && wasQuoted(i));
+  const closeBase  = [...withQuote, ...lostAfterQuote];
+  const closeRate  = closeBase.length ? Math.round((contracted.length / closeBase.length) * 100) : 0;
+  const starred        = Object.keys(starredIds).filter(id => starredIds[id] && realInquiries.some(i => i.refId === id)).length;
 
   const fmt = n => '$' + Math.round(n).toLocaleString('en-US');
 
@@ -1242,8 +1265,8 @@ function renderStats() {
       <div class="stat-label">Closed value</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${convRate}%</div>
-      <div class="stat-label">Conversion rate</div>
+      <div class="stat-value">${closeRate}%</div>
+      <div class="stat-label">Close rate</div>
     </div>
   `;
 }
