@@ -401,6 +401,7 @@ const COL = {
   // Hub-managed columns (written by this dashboard):
   status:25, quoteTotal:26, quoteData:27, contractGenerated:28, lastUpdatedBy:29, calendarEventId:30,
   invoiceData:31, invoiceTotal:32, starred:33, followupDate:34,
+  lastActivityAt:35, lastAutoDraftAt:36,
 };
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -491,7 +492,7 @@ async function loadInquiries() {
   setLoading(true);
   clearError();
   try {
-    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AI`);
+    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AL`);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}`;
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
@@ -573,6 +574,8 @@ function parseRow(row, rowIndex) {
     // starred: 'true' -> true, 'false' -> explicitly unstarred, '' -> never decided (eligible for auto-prioritize)
     starred:         row[COL.starred] === 'true' ? true : row[COL.starred] === 'false' ? false : undefined,
     followupDate:    row[COL.followupDate]     || '',
+    lastActivityAt:  row[COL.lastActivityAt]   || '',
+    lastAutoDraftAt: row[COL.lastAutoDraftAt]  || '',
   };
 }
 
@@ -598,12 +601,18 @@ function rowValues(inq, o) {
     pick('invoiceTotal',      inq?.invoiceTotal      || ''),
     pick('starred',           inq?.starred === true ? 'true' : inq?.starred === false ? 'false' : ''),
     pick('followupDate',      inq?.followupDate      || ''),
+    // lastActivityAt is stamped fresh on EVERY write regardless of what else
+    // changed -- it's the "how long has this been quiet" signal the daily
+    // automation reads. lastAutoDraftAt is deliberately preserved as-is here;
+    // only the automation script itself is allowed to set it.
+    new Date().toISOString(),
+    pick('lastAutoDraftAt',   inq?.lastAutoDraftAt   || ''),
   ];
 }
 
 async function writeRow(rowIndex, values) {
   const startLetter = colLetter(COL.status);          // Z
-  const endLetter   = colLetter(COL.followupDate);     // AI
+  const endLetter   = colLetter(COL.lastAutoDraftAt);  // AK
   const range = encodeURIComponent(`${CONFIG.TAB}!${startLetter}${rowIndex}:${endLetter}${rowIndex}`);
   const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
 
