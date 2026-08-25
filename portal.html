@@ -334,11 +334,11 @@ const PROD_DEFAULTS = [
   {id:'backline', label:'Backline (drums / amps)', price:500, on:false}
 ];
 const STAFF_DEFAULTS = [
-  {id:'security', label:'Security', rate:38, count:3},
-  {id:'bar', label:'Bartenders', rate:32, count:2},
-  {id:'door', label:'Door host', rate:30, count:1},
-  {id:'coat', label:'Coat check', rate:28, count:0},
-  {id:'tech', label:'Production / AV tech', rate:30, count:1}
+  {id:'security', label:'Security', rate:45, count:1},
+  {id:'bar', label:'Bartenders', rate:40, count:0},
+  {id:'door', label:'Door host', rate:50, count:0},
+  {id:'coat', label:'Coat check', rate:30, count:0},
+  {id:'tech', label:'Production / AV tech', rate:50, count:1}
 ];
 const SUPPLY_DEFAULTS = [
   {id:'bar', label:'Bar supplies & consumables', price:600},
@@ -1198,6 +1198,28 @@ function mapInquiry(inq){
   if(inq.doorsOpen)  st.contract.accessFrom     = pretty(inq.doorsOpen);
   if(inq.doorsClose) st.contract.accessUntil    = pretty(inq.doorsClose);
   if(inq.eventDate)  st.contract.insuranceDate  = (()=>{ const d=new Date(inq.eventDate+'T12:00:00'); d.setDate(d.getDate()-7); return d.toISOString().slice(0,10); })();
+
+  // Services requested on the form are the only signal we have for which
+  // production items actually apply -- only override the static default
+  // (dj: on) when the form was actually used and gives us something to go on.
+  // PA and lighting stay on regardless; they're close to universal for any
+  // gathering here, unlike a DJ setup specifically.
+  const services = (inq.servicesNeeded || '').toLowerCase();
+  if(services){
+    const dj = st.prod.find(p => p.id === 'dj');
+    if(dj) dj.on = services.includes('dj') || services.includes('music');
+  }
+
+  // Bar staffing: off by default (see STAFF_DEFAULTS) until we have a reason
+  // to staff it. Either signal -- the alcohol question or "Bar Service" in
+  // the services list -- is enough. Scaled by guest tier once we know we
+  // need bar staff at all; these are starting points, not final numbers.
+  const wantsBar = /^\s*yes/i.test(inq.alcohol || '') || services.includes('bar service');
+  if(wantsBar){
+    const bar = st.staff.find(s => s.id === 'bar');
+    if(bar) bar.count = st.venue.tier === 't50' ? 1 : (st.venue.tier === 't150' ? 2 : 3);
+  }
+
   st.invoice.number = 'INV-' + (inq.refId||'');
   return st;
 }
@@ -1359,19 +1381,30 @@ function encodeMimeHeader(str){
 }
 async function gmailDraft(to, subject, html, fileName, base64){
   if(!to) throw new Error('No client email on this inquiry.');
-  const b='b_170e_'+Date.now();
-  const lines=[
-    'MIME-Version: 1.0',
-    `To: ${to}`,
-    `Subject: ${encodeMimeHeader(subject)}`,
-    `Content-Type: multipart/mixed; boundary="${b}"`,'',
-    `--${b}`,'Content-Type: text/html; charset="UTF-8"','',html,'',
-    `--${b}`,`Content-Type: application/pdf; name="${fileName}"`,
-    'Content-Transfer-Encoding: base64',
-    `Content-Disposition: attachment; filename="${fileName}"`,'',base64,'',
-    `--${b}--`,
-  ].join('\r\n');
-  const raw=btoa(unescape(encodeURIComponent(lines))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  let lines;
+  if(base64 && fileName){
+    const b='b_170e_'+Date.now();
+    lines=[
+      'MIME-Version: 1.0',
+      `To: ${to}`,
+      `Subject: ${encodeMimeHeader(subject)}`,
+      `Content-Type: multipart/mixed; boundary="${b}"`,'',
+      `--${b}`,'Content-Type: text/html; charset="UTF-8"','',html,'',
+      `--${b}`,`Content-Type: application/pdf; name="${fileName}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${fileName}"`,'',base64,'',
+      `--${b}--`,
+    ];
+  } else {
+    lines=[
+      'MIME-Version: 1.0',
+      `To: ${to}`,
+      `Subject: ${encodeMimeHeader(subject)}`,
+      'Content-Type: text/html; charset="UTF-8"','',
+      html,
+    ];
+  }
+  const raw=btoa(unescape(encodeURIComponent(lines.join('\r\n')))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts',{
     method:'POST', headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},
     body:JSON.stringify({message:{raw}})});
@@ -1465,9 +1498,118 @@ async function saveContract(withEmail){
   }
   handoff('170e_contract_result',{ rowIndex:ctx.rowIndex, refId:ctx.refId, quoteDataJson:quoteDataJson() });
 }
-function saveInvoice(){
+// Shared path for templates that only create a Gmail draft -- no Sheet write,
+// no calendar action, no status change. `opts.attachPdf` (an element id) is
+// optional; when present the same pdfFromElement() snapshot used by
+// quote/contract emails gets attached here too.
+async function draftOnly(subject, bodyHtml, busyLabel, opts){
+  opts = opts || {};
   if(!requireHub()) return;
+  const S=Portal._S();
+  if(!S.client.email){ alert('No client email on this inquiry.'); return; }
+  if(!token()){ alert('Not signed in. Return to the hub and sign in.'); return; }
+  busy(busyLabel);
+  try{
+    let pdfB64 = null;
+    if(opts.attachPdf) pdfB64 = await pdfFromElement(opts.attachPdf);
+    await gmailDraft(S.client.email, subject, emailShell(bodyHtml), opts.filename || '', pdfB64);
+    Portal._toast('Draft created');
+  }catch(err){ alert('Could not create draft: '+err.message); }
+  busy('');
+}
+
+async function sendFollowUp(){
+  const S=Portal._S(), t=Portal._quoteTotals();
+  await draftOnly(
+    `Carriage House: Following up on your quote`,
+    `<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
+     <p style="margin:0 0 16px">Wanted to check in on the quote for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong>, attached again for reference.</p>
+     <p style="margin:0 0 16px">Still interested? Happy to adjust anything, guest count, budget, timing, if your plans have shifted.</p>
+     <p style="margin:0 0 4px">Best,</p>
+     <p style="margin:0 0 4px">Lucas</p>
+     <p style="margin:0">(978) 879-3364</p>`,
+    'Drafting follow-up…',
+    { attachPdf:'quoteDoc', filename:`170_Eldridge_Quote_${(S.client.name||'Client').replace(/\s+/g,'_')}.pdf` }
+  );
+}
+
+async function sendNoDate(){
+  const S=Portal._S();
+  await draftOnly(
+    `Carriage House: About your requested date`,
+    `<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
+     <p style="margin:0 0 16px">Unfortunately <strong>${longDate(S.event.date)}</strong> is no longer available for <strong>${esc(S.event.name||'your event')}</strong>.</p>
+     <p style="margin:0 0 16px">We'd love to find another date that works. Let me know what flexibility you have and I'll check what's open.</p>
+     <p style="margin:0 0 4px">Best,</p>
+     <p style="margin:0 0 4px">Lucas</p>
+     <p style="margin:0">(978) 879-3364</p>`,
+    'Drafting message…'
+  );
+}
+
+async function sendPaymentReminder(){
+  const S=Portal._S(), t=Portal._invoiceTotals();
+  await draftOnly(
+    `Carriage House: Payment reminder for ${S.event.name||'your event'}`,
+    `<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
+     <p style="margin:0 0 16px">Quick reminder, there's a balance of <strong style="color:#a87524">$${t.balance.toLocaleString('en-US')}</strong> outstanding for <strong>${esc(S.event.name||'your event')}</strong>.</p>
+     <div style="background:#fbf6ec;border:1px solid #e6d9bd;padding:16px 18px;margin:0 0 16px;font-size:13px;line-height:1.9">
+       <div>Zelle / Venmo: <strong>170eldridge@gmail.com</strong></div>
+       <div>Check payable to: <strong>170 Eldridge LLC</strong></div>
+       <div>ACH: Wells Fargo, Rtg 102307164, Acct 3685727525</div>
+       <div>Wire: Wells Fargo, Rtg 121000248, same account</div>
+       <div>Credit card: +3.5% processing fee</div>
+     </div>
+     <p style="margin:0 0 16px">Let me know if you have any questions.</p>
+     <p style="margin:0 0 4px">Best,</p>
+     <p style="margin:0 0 4px">Lucas</p>
+     <p style="margin:0">(978) 879-3364</p>`,
+    'Drafting reminder…'
+  );
+}
+
+async function sendThankYou(){
+  const S=Portal._S();
+  await draftOnly(
+    `Carriage House: Thank you for celebrating with us`,
+    `<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
+     <p style="margin:0 0 16px">Thank you for choosing Carriage House for <strong>${esc(S.event.name||'your event')}</strong>. Hope it was everything you wanted.</p>
+     <p style="margin:0 0 16px">If you're already thinking about the next one, we'd love to have you back.</p>
+     <p style="margin:0 0 4px">Best,</p>
+     <p style="margin:0 0 4px">Lucas</p>
+     <p style="margin:0">(978) 879-3364</p>`,
+    'Drafting message…'
+  );
+}
+
+async function saveInvoice(withEmail){
+  if(!requireHub()) return;
+  const S=Portal._S();
   const t=Portal._invoiceTotals();
+  if(withEmail){
+    if(!token()){ alert('Not signed in. Return to the hub and sign in.'); return; }
+    busy('Drafting invoice email…');
+    try{
+      const pdfB64 = await pdfFromElement('invoiceDoc');
+      await gmailDraft(
+        S.client.email,
+        `Carriage House: Invoice for ${S.event.name||'your event'}`,
+        emailShell(`<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
+          <p style="margin:0 0 16px">Here's the invoice for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong>.</p>
+          <div style="background:#fbf6ec;border:1px solid #e6d9bd;padding:20px 22px;margin:0 0 16px">
+            <div style="font-size:14px;margin-bottom:6px">Total: <strong style="color:#a87524">$${t.items.toLocaleString('en-US')}</strong></div>
+            <div style="font-size:14px">Balance due: <strong style="color:#a87524">$${t.balance.toLocaleString('en-US')}</strong></div>
+          </div>
+          <p style="margin:0 0 16px">Payment info is on the invoice. Let me know if anything needs adjusting.</p>
+          <p style="margin:0 0 4px">Best,</p>
+          <p style="margin:0 0 4px">Lucas</p>
+          <p style="margin:0">(978) 879-3364</p>`),
+        `170_Eldridge_Invoice_${(S.client.name||'Client').replace(/\s+/g,'_')}.pdf`,
+        pdfB64
+      );
+    }catch(err){ busy(''); alert('Invoice will still be saved, but: '+err.message); }
+    busy('');
+  }
   handoff('170e_invoice_result',{
     rowIndex:ctx.rowIndex, refId:ctx.refId,
     invoiceTotal:t.items, invoiceDataJson:invoiceDataJson(), quoteDataJson:quoteDataJson(),
@@ -1546,12 +1688,17 @@ function renderBar(){
   }
   if(stage==='quote'){
     btns+=`<button class="io-btn" onclick="Hub.saveQuote(false)">Save to Hub</button>
-           <button class="io-btn" onclick="Hub.saveQuote(true)">Email quote + hold</button>`;
+           <button class="io-btn" onclick="Hub.saveQuote(true)">Email quote + hold</button>
+           <button class="io-btn" onclick="Hub.sendFollowUp()">Follow-up</button>
+           <button class="io-btn" onclick="Hub.sendNoDate()">No date</button>`;
   } else if(stage==='contract'){
     btns+=`<button class="io-btn" onclick="Hub.saveContract(false)">Save contract</button>
            <button class="io-btn" onclick="Hub.saveContract(true)">Email contract + update hold</button>`;
   } else {
-    btns+=`<button class="io-btn" onclick="Hub.saveInvoice()">Save invoice to Hub</button>`;
+    btns+=`<button class="io-btn" onclick="Hub.saveInvoice(false)">Save invoice to Hub</button>
+           <button class="io-btn" onclick="Hub.saveInvoice(true)">Email invoice</button>
+           <button class="io-btn" onclick="Hub.sendPaymentReminder()">Reminder</button>
+           <button class="io-btn" onclick="Hub.sendThankYou()">Thank you</button>`;
   }
   const u=user();
   bar.innerHTML=btns+(u?`<span class="ref-chip" title="Signed in">${esc(u)}</span>`:'');
@@ -1584,7 +1731,7 @@ function start(){
 const _go = Portal.go;
 Portal.go = function(s){ _go(s); renderBar(); };
 
-return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText };
+return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, sendFollowUp, sendNoDate, sendPaymentReminder, sendThankYou, _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText, _draftOnly:draftOnly };
 })();
 window.Hub = Hub;
 Hub.start();
