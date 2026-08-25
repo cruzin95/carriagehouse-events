@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -211,6 +212,25 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
 .empty{text-align:center;padding:40px 20px;color:var(--muted-2);font-family:var(--mono);font-size:11px;letter-spacing:.06em;line-height:1.9}
 .empty .big{font-family:var(--display);font-size:34px;color:var(--line-2);letter-spacing:.06em;display:block;margin-bottom:6px}
 
+/* inquiry reference panel */
+.inq-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:flex;justify-content:flex-end;backdrop-filter:blur(2px)}
+.inq-overlay.hidden{display:none}
+.inq-panel{width:420px;max-width:100%;height:100%;background:var(--surface);display:flex;flex-direction:column;overflow:hidden;box-shadow:-8px 0 40px rgba(0,0,0,.5)}
+.inq-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;background:var(--surface-2);flex-shrink:0}
+.inq-head .t{font-family:var(--display);font-size:20px;letter-spacing:.04em;color:var(--ink)}
+.inq-head .ref{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:2px}
+.inq-close{width:30px;height:30px;border-radius:5px;border:1px solid var(--line-2);background:transparent;color:var(--muted);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.14s;flex-shrink:0;line-height:1}
+.inq-close:hover{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--ink)}
+.inq-body{flex:1;overflow-y:auto;padding:18px 20px}
+.inq-sec{margin-bottom:18px}
+.inq-sec-t{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.inq-sec-t::before{content:"// ";color:var(--amber-dim)}
+.inq-row{display:grid;grid-template-columns:100px 1fr;gap:8px;padding:3px 0;font-size:12.5px}
+.inq-row .l{color:var(--muted);font-family:var(--mono);font-size:11px}
+.inq-row .v{color:var(--ink);word-break:break-word}
+.inq-notes{font-size:12.5px;color:var(--ink);line-height:1.6;font-style:italic}
+.inq-empty{text-align:center;padding:30px 20px;color:var(--muted-2);font-family:var(--mono);font-size:11px}
+
 .presentation .no-present{display:none!important}
 
 /* print */
@@ -281,6 +301,16 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
   </div>
 </section>
 
+<div class="inq-overlay hidden" id="inqOverlay" onclick="if(event.target===this) Hub.toggleInquiryPanel()">
+  <div class="inq-panel">
+    <div class="inq-head">
+      <div><div class="t" id="inqPanelName">Inquiry</div><div class="ref" id="inqPanelRef"></div></div>
+      <button class="inq-close" onclick="Hub.toggleInquiryPanel()">&times;</button>
+    </div>
+    <div class="inq-body" id="inqBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -289,9 +319,9 @@ const Portal = (function(){
 
 /* ---------------- config ---------------- */
 const TIERS = [
+  {id:'t50',  label:'Up to 50 guests', rate:3000},
   {id:'t150', label:'Up to 150 guests', rate:4500},
-  {id:'t250', label:'Up to 250 guests', rate:6500},
-  {id:'t350', label:'Full venue (up to 350)', rate:8500}
+  {id:'t300', label:'Full venue (up to 300)', rate:6500}
 ];
 const INCLUDED_HOURS = 6, EXTRA_HOUR_RATE = 400, LOADIN_RATE = 250;
 const PROD_DEFAULTS = [
@@ -1159,7 +1189,7 @@ function mapInquiry(inq){
   const g = parseInt(inq.guestCount,10);
   if(!isNaN(g) && g>0){
     st.event.guests = g;
-    st.venue.tier = g<=150 ? 't150' : (g<=250 ? 't250' : 't350');
+    st.venue.tier = g<=50 ? 't50' : (g<=150 ? 't150' : 't300');
   }
   const hrs = hoursBetween(inq.doorsOpen, inq.doorsClose);
   if(hrs){ st.event.hours = hrs; st.event.staffHours = Math.round(hrs)+1; }
@@ -1194,23 +1224,63 @@ function invoiceDataJson(){
 }
 
 /* ---- PDF from plain text (jsPDF) ---- */
-function pdfBase64(title, text){
+// Renders the actual on-screen document (not a plain-text reconstruction) into a
+// paginated PDF. Reuses the same rules as the app's own @media print stylesheet
+// (via onclone) so the emailed PDF matches what "Print / PDF" already produces.
+// Pulls the app's own @media print rules verbatim from the stylesheet, so the
+// emailed PDF always matches whatever "Print / PDF" currently does -- no
+// hand-copied CSS to keep in sync.
+function getPrintCssText(){
+  for(const sheet of document.styleSheets){
+    let rules;
+    try{ rules = sheet.cssRules; }catch(e){ continue; }
+    if(!rules) continue;
+    for(const rule of rules){
+      if(rule.media && rule.media.mediaText && rule.media.mediaText.includes('print')){
+        return [...rule.cssRules].map(r=>r.cssText).join('\n');
+      }
+    }
+  }
+  return '';
+}
+async function pdfFromElement(elId){
+  if(!window.html2canvas) throw new Error('html2canvas not loaded');
   if(!window.jspdf || !window.jspdf.jsPDF) throw new Error('jsPDF not loaded');
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'pt', format:'letter'});
-  const M=54, W=doc.internal.pageSize.getWidth()-M*2, H=doc.internal.pageSize.getHeight()-M;
-  let y=M;
-  doc.setFont('helvetica','bold'); doc.setFontSize(14);
-  doc.text(title, M, y); y+=22;
-  doc.setFont('courier','normal'); doc.setFontSize(9);
-  text.split('\n').forEach(line=>{
-    const wrapped = doc.splitTextToSize(line||' ', W);
-    wrapped.forEach(w=>{
-      if(y>H-20){ doc.addPage(); y=M; }
-      doc.text(w, M, y); y+=12;
-    });
+  const src = document.getElementById(elId);
+  if(!src) throw new Error('Nothing to export yet.');
+  const printCss = getPrintCssText();
+  const canvas = await html2canvas(src, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    onclone: (clonedDoc, clonedEl) => {
+      if(printCss){
+        const style = clonedDoc.createElement('style');
+        style.textContent = printCss;
+        clonedDoc.head.appendChild(style);
+      }
+      clonedEl.style.maxHeight = 'none';
+      clonedEl.style.overflow = 'visible';
+    },
   });
-  return doc.output('datauristring').split(',')[1];
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit:'pt', format:'letter' });
+  const M = 28;
+  const pageW = pdf.internal.pageSize.getWidth() - M*2;
+  const pageH = pdf.internal.pageSize.getHeight() - M*2;
+  const imgW = pageW;
+  const imgH = canvas.height * (imgW / canvas.width);
+  const imgData = canvas.toDataURL('image/png');
+  let heightLeft = imgH, position = M;
+  pdf.addImage(imgData, 'PNG', M, position, imgW, imgH);
+  heightLeft -= pageH;
+  while(heightLeft > 0){
+    position -= pageH;
+    pdf.addPage();
+    pdf.addImage(imgData, 'PNG', M, position, imgW, imgH);
+    heightLeft -= pageH;
+  }
+  return pdf.output('datauristring').split(',')[1];
 }
 
 /* ---- Google Calendar ---- */
@@ -1270,17 +1340,22 @@ async function patchHold(){
 
 /* ---- Gmail draft ---- */
 function emailShell(inner){
-  return `<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;color:#0f0f12">
-  <div style="background:#1a1a2e;padding:28px 32px;margin-bottom:24px">
-    <div style="font-size:18px;color:#fff;letter-spacing:.03em">170 Eldridge LLC</div>
-    <div style="font-size:11px;color:#c9a84c;margin-top:4px;letter-spacing:.1em;text-transform:uppercase">Carriage House</div>
+  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;color:#1a1816">
+  <div style="background:#0e0d0a;padding:32px 36px;margin-bottom:24px">
+    <div style="font-family:'Arial Narrow',Arial,Helvetica,sans-serif;font-weight:700;font-size:22px;letter-spacing:.08em;text-transform:uppercase;color:#f2ede1">Carriage House</div>
   </div>
   <div style="padding:0 8px">${inner}
-    <div style="border-top:1px solid #e2e2ea;padding-top:16px;margin-top:24px;font-size:12px;color:#6b6b7e">
-      <strong style="color:#0f0f12">Carriage House</strong><br>170 Eldridge Street, New York, NY 10002<br>
-      <a href="https://carriagehouse.nyc" style="color:#0f3460">carriagehouse.nyc</a>
+    <div style="border-top:1px solid #e6e2d6;padding-top:16px;margin-top:24px;font-size:12px;color:#6b6353">
+      <strong style="color:#1a1816">Carriage House</strong><br>170 Eldridge Street, New York, NY 10002<br>
+      <a href="https://carriagehouse.nyc" style="color:#a87524">carriagehouse.nyc</a>
     </div>
   </div></div>`;
+}
+// RFC 2047 encoded-word: MIME headers must stay 7-bit ASCII. Non-ASCII values
+// (accented names, punctuation) need this or they render as mojibake in the client.
+function encodeMimeHeader(str){
+  if(/^[\x00-\x7F]*$/.test(str)) return str; // pure ASCII, nothing to do
+  return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(str))) + '?=';
 }
 async function gmailDraft(to, subject, html, fileName, base64){
   if(!to) throw new Error('No client email on this inquiry.');
@@ -1288,7 +1363,7 @@ async function gmailDraft(to, subject, html, fileName, base64){
   const lines=[
     'MIME-Version: 1.0',
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodeMimeHeader(subject)}`,
     `Content-Type: multipart/mixed; boundary="${b}"`,'',
     `--${b}`,'Content-Type: text/html; charset="UTF-8"','',html,'',
     `--${b}`,`Content-Type: application/pdf; name="${fileName}"`,
@@ -1326,22 +1401,26 @@ async function saveQuote(withEmail){
     busy('Creating hold & drafting email…');
     try{
       const t=Portal._quoteTotals();
+      const pdfB64 = await pdfFromElement('quoteDoc');
       const [cal]=await Promise.all([
         calendarEventId?Promise.resolve({id:calendarEventId}):createHold(),
         gmailDraft(
           S.client.email,
-          `Carriage House — Quote for ${S.event.name||'Your Event'} on ${longDate(S.event.date)}`,
+          `Carriage House: Quote for ${S.event.name||'Your Event'} on ${longDate(S.event.date)}`,
           emailShell(`<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
-            <p style="margin:0 0 16px">Thank you for your interest in Carriage House. Your quote for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong> is attached.</p>
-            <div style="background:#f7f7fa;border:1px solid #e2e2ea;border-radius:6px;padding:16px 20px;margin:0 0 16px">
-              <div style="font-size:11px;font-weight:600;color:#6b6b7e;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">Quote Summary</div>
-              <div style="font-size:14px;margin-bottom:6px">Guests: <strong>${esc(S.event.guests||'—')}</strong></div>
-              <div style="font-size:16px;border-top:1px solid #e2e2ea;padding-top:10px;margin-top:10px">Total: <strong>$${t.grand.toLocaleString('en-US')}</strong></div>
+            <p style="margin:0 0 16px">Here's the quote for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong>.</p>
+            <div style="background:#fbf6ec;border:1px solid #e6d9bd;padding:20px 22px;margin:0 0 16px">
+              <div style="font-family:'Courier New',Courier,monospace;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#a87524;margin-bottom:12px">Quote Summary</div>
+              <div style="font-size:14px;margin-bottom:6px">Guests: <strong>${esc(S.event.guests||'-')}</strong></div>
+              <div style="font-size:16px;border-top:1px dotted #d9c9a3;padding-top:10px;margin-top:10px">Total: <strong style="color:#a87524">$${t.grand.toLocaleString('en-US')}</strong></div>
             </div>
-            <p style="margin:0 0 16px">Happy to walk through the details or adjust anything to better fit your plans.</p>
-            <p style="margin:0 0 4px">Best,</p>`),
+            <p style="margin:0 0 16px">This is a starting point, not a fixed number. If the budget doesn't line up, we can adjust guest count, production, or the date.</p>
+            <p style="margin:0 0 16px">Let me know if you'd like to go through it, or if anything needs changing. We can also hop on a call or set up a walkthrough if that's easier.</p>
+            <p style="margin:0 0 4px">Best,</p>
+            <p style="margin:0 0 4px">Lucas</p>
+            <p style="margin:0">(978) 879-3364</p>`),
           `170_Eldridge_Quote_${(S.client.name||'Client').replace(/\s+/g,'_')}.pdf`,
-          pdfBase64('Carriage House — Event Quote', Portal._quoteText())
+          pdfB64
         ),
       ]);
       if(cal&&cal.id) calendarEventId=cal.id;
@@ -1364,19 +1443,22 @@ async function saveContract(withEmail){
     try{
       await patchHold();
       const x=Portal._contractCtx();
+      const pdfB64 = await pdfFromElement('contractDoc');
       await gmailDraft(
         S.client.email,
-        `Carriage House — Rental Agreement for ${S.event.name||'Your Event'}`,
+        `Carriage House: Rental Agreement for ${S.event.name||'Your Event'}`,
         emailShell(`<p style="margin:0 0 16px">Hi ${esc((S.client.name||'').split(' ')[0]||'there')},</p>
-          <p style="margin:0 0 16px">Attached is the venue rental agreement for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong>.</p>
-          <div style="background:#f7f7fa;border:1px solid #e2e2ea;border-radius:6px;padding:16px 20px;margin:0 0 16px">
-            <div style="font-size:14px;margin-bottom:6px">Total: <strong>$${x.total.toLocaleString('en-US')}</strong></div>
+          <p style="margin:0 0 16px">Here's the rental agreement for <strong>${esc(S.event.name||'your event')}</strong> on <strong>${longDate(S.event.date)}</strong>.</p>
+          <div style="background:#fbf6ec;border:1px solid #e6d9bd;padding:20px 22px;margin:0 0 16px">
+            <div style="font-size:14px;margin-bottom:6px">Total: <strong style="color:#a87524">$${x.total.toLocaleString('en-US')}</strong></div>
             <div style="font-size:14px">Security deposit: <strong>$${x.deposit.toLocaleString('en-US')}</strong> ${x.credited?'(credited to total)':'(refundable)'}</div>
           </div>
-          <p style="margin:0 0 16px">Please review, sign, and return at your convenience. The deposit is due on signing to confirm the date.</p>
-          <p style="margin:0 0 4px">Best,</p>`),
+          <p style="margin:0 0 16px">Review, sign, and send it back whenever you're ready. The deposit is due on signing to hold the date. We can also hop on a call or set up a walkthrough if anything needs discussing.</p>
+          <p style="margin:0 0 4px">Best,</p>
+          <p style="margin:0 0 4px">Lucas</p>
+          <p style="margin:0">(978) 879-3364</p>`),
         `170_Eldridge_Agreement_${(S.client.name||'Client').replace(/\s+/g,'_')}.pdf`,
-        pdfBase64('Venue Rental Agreement', Portal._contractText())
+        pdfB64
       );
     }catch(err){ busy(''); alert('Contract will still be saved, but: '+err.message); }
     busy('');
@@ -1397,6 +1479,59 @@ function backToHub(){
   window.location.href='index.html';
 }
 
+/* ---- inquiry reference panel ---- */
+function toggleInquiryPanel(){
+  const ov=gid('inqOverlay'); if(!ov) return;
+  const opening = ov.classList.contains('hidden');
+  if(opening) renderInquiryPanel();
+  ov.classList.toggle('hidden', !opening);
+}
+function renderInquiryPanel(){
+  const inq = ctx.inquiry || {};
+  const sec = (title, rows) => {
+    const filtered = rows.filter(([,v])=>v);
+    if(!filtered.length) return '';
+    return `<div class="inq-sec"><div class="inq-sec-t">${esc(title)}</div>${filtered.map(([l,v])=>`<div class="inq-row"><span class="l">${esc(l)}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>`;
+  };
+  const dateStr = inq.eventDate ? new Date(inq.eventDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}) : '';
+  const body = [
+    sec('Contact', [
+      ['Name', [inq.firstName,inq.lastName].filter(Boolean).join(' ')],
+      ['Email', inq.email],
+      ['Phone', inq.phone],
+      ['Company', inq.company],
+      ['Referred by', inq.referral],
+    ]),
+    sec('Event', [
+      ['Type', inq.eventType],
+      ['Date', dateStr],
+      ['Doors open', inq.doorsOpen],
+      ['Doors close', inq.doorsClose],
+      ['Guests', inq.guestCount ? inq.guestCount+' guests' : ''],
+      ['Rooftop', inq.rooftop],
+    ]),
+    sec('Logistics', [
+      ['Services', inq.servicesNeeded],
+      ['Door staff', inq.doorStaff],
+      ['Outside vendors', inq.outsideVendors],
+      ['Guest method', inq.guestMethod],
+      ['Public event', inq.publicEvent],
+      ['Alcohol', inq.alcohol],
+      ['Age req.', inq.ageReq],
+      ['Insurance', inq.insurance],
+    ]),
+    sec('Budget', [
+      ['Range', inq.budget],
+      ['Payment', inq.payMethod],
+    ]),
+    inq.notes ? `<div class="inq-sec"><div class="inq-sec-t">Notes</div><div class="inq-notes">${esc(inq.notes)}</div></div>` : '',
+  ].join('') || '<div class="inq-empty">No inquiry data on file.</div>';
+  const name = [inq.firstName,inq.lastName].filter(Boolean).join(' ') || 'Inquiry';
+  gid('inqPanelName').textContent = name;
+  gid('inqPanelRef').textContent = ctx.refId || '';
+  gid('inqBody').innerHTML = body;
+}
+
 /* ---- UI ---- */
 let busyMsg='';
 function busy(m){ busyMsg=m; renderBar(); }
@@ -1406,6 +1541,9 @@ function renderBar(){
   const stage=Portal._S().stage;
   if(busyMsg){ bar.innerHTML=`<span class="ref-chip">${esc(busyMsg)}</span>`; return; }
   let btns=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>`;
+  if(ctx.inquiry && Object.keys(ctx.inquiry).length){
+    btns+=`<button class="io-btn" onclick="Hub.toggleInquiryPanel()">Inquiry</button>`;
+  }
   if(stage==='quote'){
     btns+=`<button class="io-btn" onclick="Hub.saveQuote(false)">Save to Hub</button>
            <button class="io-btn" onclick="Hub.saveQuote(true)">Email quote + hold</button>`;
@@ -1446,7 +1584,7 @@ function start(){
 const _go = Portal.go;
 Portal.go = function(s){ _go(s); renderBar(); };
 
-return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY };
+return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText };
 })();
 window.Hub = Hub;
 Hub.start();
