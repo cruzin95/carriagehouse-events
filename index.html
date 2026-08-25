@@ -1214,6 +1214,67 @@ function renderReminderBanner() {
 
 // ── STATS ────────────────────────────────────────────────────────────
 
+// Collapses duplicate/near-duplicate inquiries down to one representative
+// entry each, for close-rate purposes only (see renderStats). Two entries
+// are considered the same inquiry if EITHER their email matches exactly, OR
+// at least 3 of these 6 signals agree (only counting ones where both sides
+// actually have a value to compare):
+//   email, first name, last name, phone, event date, week of inquiry
+// Matches are transitive (A~B and B~C merges all three into one group, even
+// if A and C alone wouldn't have matched directly). Within a group, the
+// entry that got furthest in the pipeline is kept as the representative --
+// ties broken by whichever has a quote on record, then by most recent.
+// The 3-of-6 threshold is a deliberate middle ground: loose enough to catch
+// real re-submissions (a typo'd name, a second inquiry the same week), but
+// each individual signal is weak enough alone that pure coincidence (two
+// different people who happen to share a first name) won't trigger a merge
+// by itself.
+function dedupeForCloseRate(items) {
+  const normStr   = v => (v || '').toString().trim().toLowerCase();
+  const normPhone = v => (v || '').toString().replace(/\D/g, '');
+  const weekStart = v => {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    const dow = (d.getDay() + 6) % 7; // days since Monday
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
+    return start.toISOString().slice(0, 10);
+  };
+  const norm = items.map(i => ({
+    email: normStr(i.email), first: normStr(i.firstName), last: normStr(i.lastName),
+    phone: normPhone(i.phone), eventDate: i.eventDate || '',
+    week: i.timestamp ? weekStart(i.timestamp) : '',
+  }));
+
+  function isDup(a, b) {
+    if (a.email && b.email && a.email === b.email) return true;
+    let matched = 0;
+    if (a.first && b.first && a.first === b.first) matched++;
+    if (a.last && b.last && a.last === b.last) matched++;
+    if (a.phone && b.phone && a.phone === b.phone) matched++;
+    if (a.eventDate && b.eventDate && a.eventDate === b.eventDate) matched++;
+    if (a.week && b.week && a.week === b.week) matched++;
+    return matched >= 3;
+  }
+
+  const n = items.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (isDup(norm[i], norm[j])) union(i, j);
+
+  const STATUS_RANK = { invoiced: 6, contracted: 5, quoted: 4, stale: 3, dead: 2, cancelled: 2, new: 1 };
+  const groups = {};
+  for (let i = 0; i < n; i++) (groups[find(i)] = groups[find(i)] || []).push(items[i]);
+
+  return Object.values(groups).map(group => group.slice().sort((a, b) => {
+    const rankDiff = (STATUS_RANK[b.status] || 0) - (STATUS_RANK[a.status] || 0);
+    if (rankDiff) return rankDiff;
+    const quoteDiff = (parseFloat(b.quoteTotal) || 0) - (parseFloat(a.quoteTotal) || 0);
+    if (quoteDiff) return quoteDiff;
+    return (b.timestamp || '').localeCompare(a.timestamp || '');
+  })[0]);
+}
+
 function renderStats() {
   // Test entries never feed into any of these numbers. Matches "test" as a
   // whole word or word-start (test, Test, testing, tester) across the
@@ -1243,10 +1304,18 @@ function renderStats() {
   // later went cold is a genuine loss and should count against the rate;
   // a lead that went stale/dead before ever getting a quote isn't a lost
   // deal, it just never got that far, so it's excluded either way.
+  //
+  // Duplicates/near-duplicates are collapsed to one entry each (see
+  // dedupeForCloseRate) before any of this math runs, scoped to close rate
+  // only -- Active/Pipeline/Closed above are deliberately left as raw counts.
   const wasQuoted = i => parseFloat(i.quoteTotal) > 0;
-  const lostAfterQuote = realInquiries.filter(i => ['stale', 'dead', 'cancelled'].includes(i.status) && wasQuoted(i));
-  const closeBase  = [...withQuote, ...lostAfterQuote];
-  const closeRate  = closeBase.length ? Math.round((contracted.length / closeBase.length) * 100) : 0;
+  const closeRateCandidates = realInquiries.filter(i =>
+    i.status === 'quoted' || i.status === 'contracted' || i.status === 'invoiced' ||
+    (['stale', 'dead', 'cancelled'].includes(i.status) && wasQuoted(i))
+  );
+  const closeBase = dedupeForCloseRate(closeRateCandidates);
+  const closeWins = closeBase.filter(i => i.status === 'contracted' || i.status === 'invoiced');
+  const closeRate = closeBase.length ? Math.round((closeWins.length / closeBase.length) * 100) : 0;
   const starred        = Object.keys(starredIds).filter(id => starredIds[id] && realInquiries.some(i => i.refId === id)).length;
 
   const fmt = n => '$' + Math.round(n).toLocaleString('en-US');
