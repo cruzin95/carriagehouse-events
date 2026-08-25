@@ -375,6 +375,18 @@ function validate(){
   return ok;
 }
 
+/* ── ref id ──────────────────────────────────────────────────────────
+   The backend (Code.gs) writes whatever refId it's given, no server-side
+   generation. The hub only shows rows where refId starts with "EVT-", so
+   this has to be generated here, or every submission silently disappears
+   from the board despite writing to the Sheet successfully. */
+function generateRefId(){
+  const d = new Date();
+  const stamp = d.toISOString().slice(0,10).replace(/-/g,''); // YYYYMMDD
+  const suffix = Math.random().toString(36).slice(2,6).toUpperCase();
+  return `EVT-${stamp}-${suffix}`;
+}
+
 function buildPayload(){
   const name = document.getElementById('fullName').value.trim();
   const parts = name.split(/\s+/);
@@ -386,6 +398,8 @@ function buildPayload(){
   const tod = singleSelect.timeOfDay ? TIME_MAP[singleSelect.timeOfDay] : ['',''];
 
   return {
+    timestamp: new Date().toISOString(),
+    refId: generateRefId(),
     firstName, lastName,
     email: document.getElementById('email').value.trim(),
     phone: document.getElementById('phone').value.trim(),
