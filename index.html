@@ -42,6 +42,10 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .btn-gsi:hover{opacity:.92;border-color:var(--amber-dim)}
 .btn-gsi svg{flex-shrink:0}
 .auth-error{margin-top:16px;font-size:.8rem;color:var(--red);background:var(--red-soft);border:1px solid rgba(211,118,91,.35);border-radius:5px;padding:8px 12px;display:none}
+.gate-input{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:6px;padding:12px 14px;font-size:.9rem;color:var(--ink);font-family:inherit;text-align:center;letter-spacing:.1em;transition:.14s}
+.gate-input:focus{outline:none;border-color:var(--amber-dim)}
+.gate-btn{width:100%;margin-top:12px;background:var(--amber);border:1px solid var(--amber);color:#140f08;font-weight:700;font-family:inherit;font-size:.9rem;padding:12px;border-radius:6px;cursor:pointer;transition:.14s}
+.gate-btn:hover{background:#f4b04c;border-color:#f4b04c}
 
 /* ── HEADER ── */
 .site-header{background:rgba(14,13,10,.94);backdrop-filter:blur(10px);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--line)}
@@ -214,7 +218,18 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 <body>
 
 <!-- ══ AUTH SCREEN ══════════════════════════════════════════════════ -->
-<div id="auth-screen" class="auth-wrap">
+<div id="gate-screen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">CARRIAGE HOUSE</div>
+    <div class="auth-eyebrow">Event Hub</div>
+    <div class="auth-desc">Enter the access code to continue.</div>
+    <input type="password" class="gate-input" id="gate-input" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter') checkGate()">
+    <button class="gate-btn" id="gate-btn" onclick="checkGate()">Continue</button>
+    <div class="auth-error" id="gate-error">Incorrect code. Try again.</div>
+  </div>
+</div>
+
+<div id="auth-screen" class="auth-wrap" style="display:none">
   <div class="auth-card">
     <div class="auth-logo">CARRIAGE HOUSE</div>
     <div class="auth-eyebrow">Event Hub</div>
@@ -412,9 +427,40 @@ let followups  = {}; // { refId: 'YYYY-MM-DD' }
 let showDead   = false; // Dead column hidden by default each session
 let showStale  = false; // Stale column hidden by default each session
 
+// ── ACCESS GATE ─────────────────────────────────────────────────────────
+// A soft deterrent, not real security: this all runs in the browser, so
+// GATE_CODE below is technically visible to anyone who views source, same
+// as everything else on this static page. It keeps the board from being
+// the first thing a casual visitor sees when landing on the URL -- it does
+// not add protection beyond that. The actual access control is still the
+// Google sign-in screen behind it, and the Sheet's own sharing settings.
+const GATE_CODE = '1395';
+const GATE_KEY  = '170e_gate_ok';
+
+function checkGate(){
+  const input = document.getElementById('gate-input');
+  const err   = document.getElementById('gate-error');
+  if (input.value === GATE_CODE) {
+    localStorage.setItem(GATE_KEY, '1');
+    err.style.display = 'none';
+    document.getElementById('gate-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  } else {
+    err.style.display = 'block';
+    input.value = '';
+    input.focus();
+  }
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────
 
 window.addEventListener('load', () => {
+  // Skip the gate entirely once this device has already unlocked it once.
+  if (localStorage.getItem(GATE_KEY) === '1') {
+    document.getElementById('gate-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
+
   // starredIds & followups are rebuilt from the Sheet on every load (see loadInquiries)
 
   // Handle returns from quote/contract tools
