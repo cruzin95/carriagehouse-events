@@ -126,6 +126,18 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .d-value a:hover{text-decoration:underline}
 .d-services{font-size:.78rem;color:var(--ink2);line-height:1.7}
 .d-notes{font-size:.82rem;color:var(--ink2);line-height:1.65;font-style:italic}
+
+/* ---- calendar availability cross-reference ---- */
+.d-avail{margin-top:2px;padding-top:6px;font-family:var(--mono);font-size:.75rem;letter-spacing:.02em;line-height:1.7}
+.d-avail:empty{display:none}
+.avail-checking{color:var(--muted-2)}
+.avail-ok{color:var(--green)}
+.avail-conflict{color:var(--amber);font-weight:700}
+.avail-err{color:var(--red)}
+.avail-list{list-style:none;margin:4px 0 0;padding:0}
+.avail-list li{padding:2px 0}
+.avail-list a{color:var(--ink2);text-decoration:none;border-bottom:1px dotted var(--line-2)}
+.avail-list a:hover{color:var(--amber);border-color:var(--amber-dim)}
 .quote-summary-box{background:var(--green-soft);border:1px solid rgba(136,180,108,.3);border-radius:6px;padding:12px 14px;margin-top:4px}
 .qs-total{font-family:var(--mono);font-size:1.15rem;font-weight:700;color:var(--green)}
 .qs-deposit{font-family:var(--mono);font-size:.76rem;color:var(--green);margin-top:2px}
@@ -414,6 +426,9 @@ const COL = {
   status:25, quoteTotal:26, quoteData:27, contractGenerated:28, lastUpdatedBy:29, calendarEventId:30,
   invoiceData:31, invoiceTotal:32, starred:33, followupDate:34,
   lastActivityAt:35, lastAutoDraftAt:36,
+  // Written directly by portal.html (inline title edit), independent of the
+  // Z:AK hub-managed batch write in writeRow() -- see EVENT_TITLE_COL there.
+  eventTitle:37,
 };
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -619,6 +634,7 @@ function parseRow(row, rowIndex) {
     followupDate:    row[COL.followupDate]     || '',
     lastActivityAt:  row[COL.lastActivityAt]   || '',
     lastAutoDraftAt: row[COL.lastAutoDraftAt]  || '',
+    eventTitle:      row[COL.eventTitle]       || '',
   };
 }
 
@@ -712,13 +728,14 @@ async function flushPendingWrites() {
   }
   const pc = sessionStorage.getItem('170e_pending_contract');
   if (pc && accessToken) {
-    const { rowIndex, refId, quoteDataJson } = JSON.parse(pc);
+    const { rowIndex, refId, quoteDataJson, calendarEventId } = JSON.parse(pc);
     const inq = inquiries.find(i => i.rowIndex === rowIndex || i.refId === refId);
     const keep = inq?.status === 'invoiced' ? 'invoiced' : 'contracted';
     const ok = await writeRow(rowIndex, rowValues(inq, {
       status: keep,
       contractGenerated: 'true',
       ...(quoteDataJson ? { quoteDataJson } : {}),
+      calendarEventId: calendarEventId || (inq?.calendarEventId || ''),
     }));
     if (ok) {
       sessionStorage.removeItem('170e_pending_contract');
@@ -726,6 +743,7 @@ async function flushPendingWrites() {
         inq.status = keep;
         inq.contractGenerated = 'true';
         if (quoteDataJson) inq.quoteData = safeJson(quoteDataJson);
+        if (calendarEventId) inq.calendarEventId = calendarEventId;
       }
       showToast('Contract saved ✓');
     }
@@ -881,6 +899,7 @@ function openDetail(refId) {
   document.getElementById('detail-body').innerHTML = renderDetailBody(selected);
   document.getElementById('detail-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  refreshDetailAvailability(selected);
 
   // Close on overlay click
   document.getElementById('detail-overlay').onclick = e => {
@@ -911,6 +930,7 @@ function renderDetailBody(inq) {
       <div class="d-section-title">Event</div>
       ${row('Type', escHtml(inq.eventType))}
       ${row('Date', date)}
+      <div class="d-avail" id="d-avail"></div>
       ${row('Doors open', escHtml(inq.doorsOpen))}
       ${row('Doors close', escHtml(inq.doorsClose))}
       ${row('Guests', inq.guestCount ? inq.guestCount + ' guests' : '')}
@@ -962,16 +982,31 @@ async function changeStatus() {
   const inq = inquiries.find(i => i.refId === selected.refId);
   if (!inq) return;
 
-  const ok = await writeRow(inq.rowIndex, rowValues(inq, { status: newStatus }));
+  // Going stale/dead retires the deal -- wipe its calendar hold (if any) so
+  // it stops occupying the date on the shared calendar. This only fires on
+  // the transition into stale/dead, not on every re-save while already
+  // retired. Reviving a deal later doesn't restore the old hold; the next
+  // "Email quote + hold" from the portal creates a fresh one.
+  const enteringRetired = ['stale', 'dead'].includes(newStatus) && !['stale', 'dead'].includes(inq.status || 'new');
+  let calendarEventId = inq.calendarEventId || '';
+  let holdRemoved = false;
+  if (enteringRetired && calendarEventId) {
+    if (await deleteCalendarHold(calendarEventId)) { calendarEventId = ''; holdRemoved = true; }
+  }
+
+  const ok = await writeRow(inq.rowIndex, rowValues(inq, { status: newStatus, calendarEventId }));
 
   if (ok) {
     inq.status = newStatus;
+    inq.calendarEventId = calendarEventId;
     // Update badge
     const badge = document.getElementById('d-status-badge');
     badge.className = `d-status-badge ${newStatus}`;
     badge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+    document.getElementById('detail-body').innerHTML = renderDetailBody(inq);
+    refreshDetailAvailability(inq);
     renderBoard();
-    showToast('Status updated');
+    showToast(holdRemoved ? 'Status updated — calendar hold removed' : 'Status updated');
   }
 }
 
@@ -1024,6 +1059,88 @@ function calendarEventLink(eventId) {
     const b64 = btoa(`${eventId} ${calId}`);
     return `https://calendar.google.com/calendar/event?eid=${encodeURIComponent(b64)}`;
   } catch { return null; }
+}
+
+// ── CALENDAR CROSS-REFERENCE ────────────────────────────────────────────
+// Checks the requested date against the live 170 Eldridge calendar so a
+// double-book is visible before a quote goes out. Read-only -- mirrors the
+// same check in portal.html but against index.html's own accessToken.
+
+// DST-safe RFC3339 midnight for America/New_York (mirrors isoNY() in portal.html)
+function isoMidnightNY(dateStr) {
+  const naive = new Date(`${dateStr}T00:00:00`);
+  const nyc = new Date(naive.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const offMs = naive.getTime() - nyc.getTime();
+  const sign = offMs >= 0 ? '-' : '+';
+  const hrs = Math.round(Math.abs(offMs) / 36e5);
+  return `${dateStr}T00:00:00${sign}${String(hrs).padStart(2, '0')}:00`;
+}
+function addDayStr(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// Excludes excludeEventId (this deal's own hold, if any) so it doesn't flag
+// itself as a conflict.
+async function checkCalendarAvailability(dateStr, excludeEventId) {
+  const CAL_ID = encodeURIComponent('170Eldridge@gmail.com');
+  const startISO = isoMidnightNY(dateStr);
+  const endISO   = isoMidnightNY(addDayStr(dateStr));
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events`
+    + `?timeMin=${encodeURIComponent(startISO)}&timeMax=${encodeURIComponent(endISO)}`
+    + `&singleEvents=true&orderBy=startTime`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (r.status === 401) throw new Error('Sign-in expired');
+  if (!r.ok) throw new Error('Calendar API ' + r.status);
+  const j = await r.json();
+  return (j.items || [])
+    .filter(ev => ev.status !== 'cancelled' && ev.id !== excludeEventId)
+    .map(ev => ({ title: ev.summary || '(untitled event)', link: ev.htmlLink || '' }));
+}
+
+// Deletes a calendar hold. Treats "already gone" (404/410) as success since
+// there's nothing left to clean up either way. Leaves the event alone (and
+// tells the caller not to clear calendarEventId) on an expired token or
+// network failure, so a transient error doesn't silently orphan the
+// reference in the Sheet.
+async function deleteCalendarHold(eventId) {
+  if (!eventId || !accessToken) return false;
+  try {
+    const CAL_ID = encodeURIComponent('170Eldridge@gmail.com');
+    const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (r.status === 401) { handleAuthExpired(); return false; }
+    return r.ok || r.status === 404 || r.status === 410;
+  } catch (e) { return false; }
+}
+
+let detailAvailSeq = 0;
+async function refreshDetailAvailability(inq) {
+  const el = document.getElementById('d-avail');
+  if (!el) return;
+  if (!inq.eventDate || !accessToken) { el.innerHTML = ''; return; }
+  const mySeq = ++detailAvailSeq;
+  el.innerHTML = `<span class="avail-checking">Checking calendar…</span>`;
+  try {
+    const events = await checkCalendarAvailability(inq.eventDate, inq.calendarEventId);
+    if (mySeq !== detailAvailSeq) return; // a newer selection has already superseded this check
+    if (!events.length) {
+      el.innerHTML = `<span class="avail-ok">✓ Date is open on the calendar</span>`;
+    } else {
+      el.innerHTML =
+        `<span class="avail-conflict">⚠ ${events.length} event${events.length > 1 ? 's' : ''} already on this date</span>`
+        + `<ul class="avail-list">${events.map(e => e.link
+            ? `<li><a href="${e.link}" target="_blank" rel="noopener">${escHtml(e.title)} →</a></li>`
+            : `<li>${escHtml(e.title)}</li>`).join('')}</ul>`;
+    }
+  } catch (err) {
+    if (mySeq === detailAvailSeq) {
+      el.innerHTML = `<span class="avail-err">Could not check calendar${err.message ? ' — ' + escHtml(err.message) : ''}</span>`;
+    }
+  }
 }
 
 function fmtDateShort(s) {

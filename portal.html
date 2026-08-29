@@ -98,7 +98,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
 .mini-money{width:88px;flex:none}
 
 /* staff role rows */
-.role{display:grid;grid-template-columns:1fr 62px 52px;gap:8px;align-items:end;padding:8px 0;border-bottom:1px solid var(--line)}
+.role{display:grid;grid-template-columns:1fr 62px 52px 22px;gap:8px;align-items:end;padding:8px 0;border-bottom:1px solid var(--line)}
 .role:last-child{border-bottom:none}
 .role .rname{font-size:13px}
 .role .rname small{display:block;font-family:var(--mono);font-size:10px;color:var(--muted-2)}
@@ -110,6 +110,39 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
 .addbtn:hover{background:rgba(234,162,58,.18)}
 .xbtn{background:none;border:none;color:var(--muted-2);font-size:15px;line-height:1;padding:2px 5px;transition:.14s}
 .xbtn:hover{color:var(--red)}
+
+/* ---- inline event title (topbar) ---- */
+.title-wrap{display:flex;align-items:center;gap:8px;min-width:0}
+.title-inp{font-family:var(--body);font-size:14px;font-weight:600;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:5px;padding:5px 8px;min-width:110px;max-width:240px;transition:.14s}
+.title-inp::placeholder{color:var(--muted-2);font-weight:400}
+.title-inp:hover{border-color:var(--line-2)}
+.title-inp:focus{outline:none;border-color:var(--amber-dim);background:var(--surface-3)}
+.title-status{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);white-space:nowrap;min-width:42px}
+.title-status.saving{color:var(--muted)}
+.title-status.saved{color:var(--green)}
+.title-status.err{color:var(--red)}
+
+/* ---- custom line items (production / staffing) ---- */
+.addline{display:flex;gap:8px;margin-top:10px;align-items:center}
+.addline .inp{padding:7px 9px;font-size:12px}
+.addline .addbtn{width:auto;flex:none;margin-top:0;padding:8px 13px;white-space:nowrap}
+.chiprow{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-dim);border-radius:100px;padding:5px 6px 5px 11px;cursor:pointer;transition:.14s}
+.chip:hover{background:rgba(234,162,58,.2)}
+.chip-x{color:var(--muted-2);font-size:12px;line-height:1;padding:1px 4px}
+.chip-x:hover{color:var(--red)}
+
+/* ---- calendar availability cross-reference ---- */
+.avail{margin-top:-4px;margin-bottom:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;line-height:1.7}
+.avail:empty{display:none}
+.avail-checking{color:var(--muted-2)}
+.avail-ok{color:var(--green)}
+.avail-conflict{color:var(--amber);font-weight:700}
+.avail-err{color:var(--red)}
+.avail-list{list-style:none;margin:4px 0 0;padding:0}
+.avail-list li{padding:2px 0}
+.avail-list a{color:var(--ink);text-decoration:none;border-bottom:1px dotted var(--line-2)}
+.avail-list a:hover{color:var(--amber);border-color:var(--amber-dim)}
 
 /* ---- the document / summary side ---- */
 .doc{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);position:sticky;top:96px}
@@ -260,6 +293,13 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
       <span class="sub">Booking Portal</span>
     </div>
     <span class="ref-chip" id="refChip">CH-0000</span>
+    <div class="title-wrap">
+      <input class="title-inp" id="eventTitleInput" placeholder="Untitled event"
+        oninput="Hub.onTitleInput(this.value)"
+        onblur="Hub.flushTitleSave(this.value)"
+        onkeydown="if(event.key==='Enter') this.blur()">
+      <span class="title-status" id="titleStatus"></span>
+    </div>
     <div class="topbar-spacer"></div>
     <div class="iobar">
       <button class="io-btn" onclick="Portal.newDeal()">New deal</button>
@@ -490,14 +530,31 @@ function renderQuoteControls(){
   const prodRows = S.prod.map((p,i)=>`
     <div class="togrow ${p.on?'':'off'}">
       <div class="sw ${p.on?'on':''}" onclick="Portal.toggleProd(${i})"></div>
-      <div class="tl">${esc(p.label)}<small>default ${fmt0(p.price)}</small></div>
+      <div class="tl">${esc(p.label)}</div>
+      <div class="money mini-money"><input class="inp" value="${p.price}" oninput="Portal.prodEdit(${i},this.value)"></div>
+      <button class="xbtn" title="Remove from this quote" onclick="Portal.prodDel(${i})">✕</button>
     </div>`).join('');
   const staffRows = S.staff.map((s,i)=>`
     <div class="role">
       <div class="rname">${esc(s.label)}<small>per hour × count</small></div>
       <div><div class="rlabel">Rate</div><div class="money"><input class="inp" value="${s.rate}" oninput="Portal.staffEdit(${i},'rate',this.value)"></div></div>
       <div><div class="rlabel">Qty</div><input class="inp" value="${s.count}" oninput="Portal.staffEdit(${i},'count',this.value)"></div>
+      <button class="xbtn" title="Remove from this quote" onclick="Portal.staffDel(${i})">✕</button>
     </div>`).join('');
+  const prodAddRow = `
+    <div class="addline">
+      <input class="inp" id="prodNewLabel" placeholder="New item name">
+      <input class="inp" id="prodNewRate" placeholder="Price" style="max-width:90px">
+      <button class="addbtn" onclick="Portal.prodAddCustom('prodNewLabel','prodNewRate')">+ Add</button>
+    </div>
+    ${catalogChipsHtml('prod')}`;
+  const staffAddRow = `
+    <div class="addline">
+      <input class="inp" id="staffNewLabel" placeholder="New role name">
+      <input class="inp" id="staffNewRate" placeholder="Rate/hr" style="max-width:90px">
+      <button class="addbtn" onclick="Portal.staffAddCustom('staffNewLabel','staffNewRate')">+ Add</button>
+    </div>
+    ${catalogChipsHtml('staff')}`;
   const supplyRows = S.supplies.map((x,i)=>`
     <div class="field"><label>${esc(x.label)}</label><div class="money"><input class="inp" value="${x.price}" oninput="Portal.supplyEdit(${i},this.value)"></div></div>`).join('');
   const sponsorRows = S.sponsors.map((sp,i)=>`
@@ -521,11 +578,12 @@ function renderQuoteControls(){
         <div class="field"><label>Client name</label><input class="inp" value="${esc(S.client.name)}" oninput="Portal.set('client.name',this.value,'quote')"></div>
         <div class="field"><label>Company</label><input class="inp" value="${esc(S.client.company)}" oninput="Portal.set('client.company',this.value,'quote')"></div>
       </div>
-      <div class="field"><label>Event name</label><input class="inp" value="${esc(S.event.name)}" oninput="Portal.set('event.name',this.value,'quote')"></div>
+      <div class="field"><label>Event name</label><input class="inp" value="${esc(S.event.name)}" oninput="Hub.onTitleInput(this.value)" onblur="Hub.flushTitleSave(this.value)"></div>
       <div class="row2">
-        <div class="field"><label>Event date</label><input type="date" class="inp" value="${esc(S.event.date)}" oninput="Portal.set('event.date',this.value,'quote')"></div>
+        <div class="field"><label>Event date</label><input type="date" class="inp" id="eventDateInput" value="${esc(S.event.date)}" oninput="Hub.onDateInput(this.value)"></div>
         <div class="field"><label>Guests (planning)</label><input class="inp" value="${S.event.guests}" oninput="Portal.set('event.guests',this.value,'quote')"></div>
       </div>
+      <div class="avail" id="dateAvail"></div>
     </div>
   </div>
 
@@ -554,14 +612,14 @@ function renderQuoteControls(){
 
   <div class="panel">
     <div class="panel-head"><span class="slash">//</span><h3>Production & Equipment</h3><div class="sw ${S.sec.prod?'on':''}" style="margin-left:auto" onclick="Portal.toggleSec('prod')"></div></div>
-    <div class="panel-body" style="${S.sec.prod?'':'opacity:.38;pointer-events:none'}">${prodRows}</div>
+    <div class="panel-body" style="${S.sec.prod?'':'opacity:.38;pointer-events:none'}">${prodRows}${prodAddRow}</div>
   </div>
 
   <div class="panel">
     <div class="panel-head"><span class="slash">//</span><h3>Staff & Supplies</h3><div class="sw ${S.sec.staff?'on':''}" style="margin-left:auto" onclick="Portal.toggleSec('staff')"></div></div>
     <div class="panel-body" style="${S.sec.staff?'':'opacity:.38;pointer-events:none'}">
       <div class="field"><label>Staffed event hours</label><input class="inp" value="${S.event.staffHours}" oninput="Portal.set('event.staffHours',this.value,'quote')"></div>
-      ${staffRows}
+      ${staffRows}${staffAddRow}
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">${supplyRows}</div>
     </div>
   </div>
@@ -592,6 +650,11 @@ function renderQuoteControls(){
       <div class="hint">${credited?'The deposit counts toward the total, so the client\'s total obligation is unchanged. Kept only on damage or violation.':'The deposit is additional to the total and refunded after the event, less any deductions. The client pays the total plus the deposit.'} Edit the deposit amount directly on the quote to override.</div>
     </div>
   </div>`;
+  // #dateAvail was just wiped by the innerHTML rebuild above -- repaint it
+  // from Hub's cached result so unrelated changes elsewhere on this panel
+  // (toggling a switch, editing a rate) don't flash the availability check
+  // back to empty.
+  if(window.Hub && Hub.repaintDateAvail) Hub.repaintDateAvail();
 }
 
 /* ---------------- QUOTE: document (right) ---------------- */
@@ -675,7 +738,57 @@ function repaintQuoteTotals(){
 /* ---------------- quote setters ---------------- */
 function set(path,val,repaint){ setPath(path,val); if(repaint==='quote') renderQuoteDoc(); }
 function toggleProd(i){ S.prod[i].on=!S.prod[i].on; renderQuoteControls(); renderQuoteDoc(); }
+function prodEdit(i,v){ S.prod[i].price=num(v); renderQuoteDoc(); }
 function staffEdit(i,k,v){ S.staff[i][k]=num(v); renderQuoteDoc(); }
+
+/* ---- custom production/staffing line items (this-quote removal + reusable catalog) ---- */
+function catalogChipsHtml(section){
+  if(!(window.Hub && Hub.getCatalog)) return '';
+  const cat = Hub.getCatalog()[section] || [];
+  const have = new Set(S[section].map(x=>(x.label||'').trim().toLowerCase()));
+  const avail = cat.filter(c=>!have.has(c.label.trim().toLowerCase()));
+  if(!avail.length) return '';
+  return `<div class="chiprow">${avail.map(c=>`
+    <span class="chip" data-label="${esc(c.label)}" data-rate="${c.rate}" onclick="Portal.${section}AddFromCatalogEl(this)" title="Add to this quote">
+      + ${esc(c.label)} (${fmt0(c.rate)})<span class="chip-x" data-id="${esc(c.id)}" onclick="event.stopPropagation();Portal.${section}DelCatalogEl(this)" title="Remove from saved items">✕</span>
+    </span>`).join('')}</div>`;
+}
+function prodDel(i){ S.prod.splice(i,1); renderQuoteControls(); renderQuoteDoc(); }
+function staffDel(i){ S.staff.splice(i,1); renderQuoteControls(); renderQuoteDoc(); }
+function prodAddCustom(labelId,rateId){
+  const label=($(labelId).value||'').trim();
+  const rate=parseFloat($(rateId).value);
+  if(!label){ toast('Enter a name for the item'); return; }
+  if(isNaN(rate)||rate<0){ toast('Enter a valid price (0 or more)'); return; }
+  S.prod.push({id:'custom_'+Date.now(),label,price:rate,on:true});
+  $(labelId).value=''; $(rateId).value='';
+  renderQuoteControls(); renderQuoteDoc();
+  if(window.Hub && Hub.persistCatalogItem) Hub.persistCatalogItem('prod',label,rate);
+}
+function staffAddCustom(labelId,rateId){
+  const label=($(labelId).value||'').trim();
+  const rate=parseFloat($(rateId).value);
+  if(!label){ toast('Enter a name for the role'); return; }
+  if(isNaN(rate)||rate<0){ toast('Enter a valid rate (0 or more)'); return; }
+  S.staff.push({id:'custom_'+Date.now(),label,rate,count:1});
+  $(labelId).value=''; $(rateId).value='';
+  renderQuoteControls(); renderQuoteDoc();
+  if(window.Hub && Hub.persistCatalogItem) Hub.persistCatalogItem('staff',label,rate);
+}
+function prodAddFromCatalogEl(el){
+  const label=el.dataset.label, rate=parseFloat(el.dataset.rate)||0;
+  if(S.prod.some(p=>(p.label||'').trim().toLowerCase()===label.trim().toLowerCase())) return;
+  S.prod.push({id:'custom_'+Date.now(),label,price:rate,on:true});
+  renderQuoteControls(); renderQuoteDoc();
+}
+function staffAddFromCatalogEl(el){
+  const label=el.dataset.label, rate=parseFloat(el.dataset.rate)||0;
+  if(S.staff.some(s=>(s.label||'').trim().toLowerCase()===label.trim().toLowerCase())) return;
+  S.staff.push({id:'custom_'+Date.now(),label,rate,count:1});
+  renderQuoteControls(); renderQuoteDoc();
+}
+function prodDelCatalogEl(el){ if(window.Hub && Hub.deleteCatalogItem) Hub.deleteCatalogItem('prod',el.dataset.id); }
+function staffDelCatalogEl(el){ if(window.Hub && Hub.deleteCatalogItem) Hub.deleteCatalogItem('staff',el.dataset.id); }
 function supplyEdit(i,v){ S.supplies[i].price=num(v); renderQuoteDoc(); }
 function toggleSec(name){ S.sec[name]=!S.sec[name]; renderQuoteControls(); renderQuoteDoc(); }
 function toggleCustomBase(){
@@ -1091,6 +1204,7 @@ function importJSON(e){
 
 function boot(){
   $('refChip').textContent=S.deal.ref;
+  const ti=$('eventTitleInput'); if(ti && document.activeElement!==ti) ti.value=S.event.name||'';
   if(window.Hub && Hub.onRender) Hub.onRender();
   document.body.classList.toggle('presentation',S.present);
   $('presentBtn').textContent = S.present?'Exit present':'Present';
@@ -1099,8 +1213,9 @@ function boot(){
   go(S.stage||'quote');
 }
 
-return { go, togglePresent, set, toggleProd, staffEdit, supplyEdit, priceEdit, resetLine, depEdit,
+return { go, togglePresent, set, toggleProd, prodEdit, staffEdit, supplyEdit, priceEdit, resetLine, depEdit,
   toggleSec, toggleCustomBase, setCustomBase, toggleDepCredit,
+  prodDel, staffDel, prodAddCustom, staffAddCustom, prodAddFromCatalogEl, staffAddFromCatalogEl, prodDelCatalogEl, staffDelCatalogEl,
   sponsorAdd, sponsorDel, sponsorEdit, copyQuote,
   pushToContract, contractSet, toggleSection, resToggle, resSet, copyContract,
   pushToInvoice, pullInvoice:pullInvoiceBtn, invSet, invItemAdd, invItemDel, invEdit,
@@ -1118,6 +1233,7 @@ return { go, togglePresent, set, toggleProd, staffEdit, supplyEdit, priceEdit, r
   _load:(obj)=>{ S=Object.assign(freshState(),obj); boot(); },
   _boot:()=>boot(),
   _toast:(m)=>toast(m),
+  _refreshControls:()=>renderQuoteControls(),
   _init:()=>{ S=freshState(); boot(); } };
 })();
 window.Portal = Portal;
@@ -1132,6 +1248,14 @@ window.Portal = Portal;
 const Hub = (function(){
 "use strict";
 const CAL_ID = encodeURIComponent('170Eldridge@gmail.com');
+// Sheet writes made directly from the portal (not routed through index.html's
+// handoff/writeRow flow): the inline event-title cell and the reusable
+// custom line-item catalog. Deliberately isolated from Save Quote/Contract/
+// Invoice -- one of these firing must never affect the others.
+const SHEET_ID = '10z_FdC74leDuRG8-CR7U4IFzWOM4-1wNueM9D3Dmn3Q';
+const INQ_TAB = 'Inquiries';
+const EVENT_TITLE_COL = 'AL'; // Inquiries!AL -- col idx 37, matches COL.eventTitle in index.html
+const CATALOG_TAB = 'LineItemOptions';
 let ctx = { active:false, rowIndex:null, refId:'', token:'', calendarEventId:'', inquiry:null };
 
 const gid = id => document.getElementById(id);
@@ -1184,7 +1308,7 @@ function mapInquiry(inq){
   st.client.name = name;
   st.client.company = inq.company || '';
   st.client.email = inq.email || '';
-  st.event.name = inq.eventType || '';
+  st.event.name = inq.eventTitle || inq.eventType || '';
   st.event.date = inq.eventDate || '';
   const g = parseInt(inq.guestCount,10);
   if(!isNaN(g) && g>0){
@@ -1271,10 +1395,19 @@ async function pdfFromElement(elId){
   const src = document.getElementById(elId);
   if(!src) throw new Error('Nothing to export yet.');
   const printCss = getPrintCssText();
+  // Print CSS removes the .split grid's width constraint (max-width:none,
+  // display:block) since a real browser print dialog handles page sizing
+  // itself. Without an explicit width, the cloned .doc just inherits
+  // whatever the live browser window happens to be -- often 1400px+ -- and
+  // squeezing that down to a fixed PDF page width shrinks all the text
+  // proportionally. Pinning a fixed, print-appropriate width here keeps the
+  // emailed PDF's text size consistent no matter how wide the window was.
+  const DOC_PX_WIDTH = 760;
   const canvas = await html2canvas(src, {
     scale: 2,
     backgroundColor: '#ffffff',
     useCORS: true,
+    windowWidth: DOC_PX_WIDTH + 80,
     onclone: (clonedDoc, clonedEl) => {
       if(printCss){
         const style = clonedDoc.createElement('style');
@@ -1283,6 +1416,9 @@ async function pdfFromElement(elId){
       }
       clonedEl.style.maxHeight = 'none';
       clonedEl.style.overflow = 'visible';
+      clonedEl.style.width = DOC_PX_WIDTH+'px';
+      clonedEl.style.maxWidth = DOC_PX_WIDTH+'px';
+      clonedEl.style.margin = '0';
     },
   });
   const { jsPDF } = window.jspdf;
@@ -1306,6 +1442,16 @@ async function pdfFromElement(elId){
 }
 
 /* ---- Google Calendar ---- */
+// Deletes a hold. Best-effort: a failed cleanup delete shouldn't block
+// creating its replacement, so this swallows errors rather than throwing.
+async function deleteHold(eventId){
+  if(!eventId || !token()) return;
+  try{
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`,{
+      method:'DELETE', headers:{Authorization:`Bearer ${token()}`},
+    });
+  }catch(e){ console.warn('Could not delete old calendar hold '+eventId+':', e); }
+}
 async function createHold(){
   const S=Portal._S(), t=Portal._quoteTotals(), inq=ctx.inquiry||{};
   if(!S.event.date) throw new Error('Set an event date before creating a hold.');
@@ -1316,16 +1462,22 @@ async function createHold(){
     start:{date:S.event.date}, end:{date:S.event.date},
     status:'tentative', transparency:'opaque',
   };
+  // Delete any existing hold first rather than leaving it in place -- the
+  // hold should always track whatever date is currently set, not whatever
+  // date it happened to be created on. A stale hold on the wrong date is
+  // worse than a brief gap, and the availability checker relies on this
+  // being accurate.
+  if(ctx.calendarEventId) await deleteHold(ctx.calendarEventId);
   const r=await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events`,{
     method:'POST', headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},
     body:JSON.stringify(body)});
   if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error('Calendar: '+(e.error?.message||r.status)); }
-  return r.json();
+  const j=await r.json();
+  ctx.calendarEventId=j.id;
+  return j;
 }
 async function patchHold(){
   const S=Portal._S();
-  const eventId=ctx.calendarEventId;
-  if(!eventId) throw new Error('No calendar hold exists yet. Email the quote first to create one.');
   const date=S.event.date;
   if(!date) throw new Error('Set an event date first.');
   const startT=S.contract.accessFrom || S.contract.admissionOpen;
@@ -1348,16 +1500,23 @@ async function patchHold(){
     '',
     'Updated via Carriage House Portal',
   ].filter(l=>l!==null).join('\n');
-  const r=await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`,{
-    method:'PATCH', headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},
+  // Same delete-and-recreate approach as createHold() -- also handles the
+  // case where a contract is being emailed without a quote-stage hold ever
+  // having existed (ctx.calendarEventId empty just skips the delete).
+  if(ctx.calendarEventId) await deleteHold(ctx.calendarEventId);
+  const r=await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events`,{
+    method:'POST', headers:{Authorization:`Bearer ${token()}`,'Content-Type':'application/json'},
     body:JSON.stringify({
       summary:`${S.client.name||'Client'} — ${S.event.name||'Private Event'}`,
       description,
       start:{dateTime:startISO,timeZone:'America/New_York'},
       end:{dateTime:endISO,timeZone:'America/New_York'},
+      status:'tentative', transparency:'opaque',
     })});
   if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error('Calendar: '+(e.error?.message||r.status)); }
-  return r.json();
+  const j=await r.json();
+  ctx.calendarEventId=j.id;
+  return j;
 }
 
 /* ---- Gmail draft ---- */
@@ -1414,6 +1573,184 @@ async function gmailDraft(to, subject, html, fileName, base64){
 function longDate(d){ return d? new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : 'your event date'; }
 
 /* ---- handoff to hub ---- */
+/* ---- inline event title: debounced direct write to Inquiries!AL, independent of Save Quote/Contract/Invoice ---- */
+let titleSaveTimer=null, titleSaveSeq=0;
+function titleStatus(state,msg){
+  const el=gid('titleStatus'); if(!el) return;
+  el.className='title-status'+(state?' '+state:'');
+  el.textContent = state==='saving'?'Saving…' : state==='saved'?'Saved' : state==='err'?(msg||'Error') : '';
+  if(state==='saved') setTimeout(()=>{ if(el.textContent==='Saved') el.textContent=''; el.className='title-status'; },1600);
+}
+function syncTitleInputs(val){
+  [gid('eventTitleInput')].forEach(el=>{ if(el && document.activeElement!==el) el.value=val||''; });
+}
+function onTitleInput(val){
+  Portal.set('event.name', val, 'quote');
+  syncTitleInputs(val);
+  scheduleTitleSave(val);
+}
+function scheduleTitleSave(val){
+  clearTimeout(titleSaveTimer);
+  titleSaveTimer=setTimeout(()=>flushTitleSave(val),700);
+}
+async function flushTitleSave(val){
+  if(!ctx.active) return; // standalone (no tracked inquiry): title stays local only
+  if(!token()){ titleStatus('err','Not signed in'); return; }
+  const mySeq = ++titleSaveSeq;
+  titleStatus('saving');
+  try{
+    const range = encodeURIComponent(`${INQ_TAB}!${EVENT_TITLE_COL}${ctx.rowIndex}`);
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueInputOption=RAW`,{
+      method:'PUT',
+      headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ values:[[val||'']] }),
+    });
+    if(mySeq!==titleSaveSeq) return; // a newer edit has already superseded this write
+    if(r.status===401){ titleStatus('err','Sign-in expired'); return; }
+    if(!r.ok) throw new Error('Sheets API '+r.status);
+    ctx.inquiry = ctx.inquiry || {};
+    ctx.inquiry.eventTitle = val||'';
+    titleStatus('saved');
+  }catch(err){ if(mySeq===titleSaveSeq) titleStatus('err','Not saved'); }
+}
+
+/* ---- custom line-item catalog: reusable production/staffing options, stored in their own Sheet tab ---- */
+let catalog = { prod:[], staff:[] };
+async function ensureCatalogSheet(){
+  try{
+    const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties.title`,
+      { headers:{ Authorization:'Bearer '+token() } });
+    if(!meta.ok) return false;
+    const j = await meta.json();
+    if((j.sheets||[]).some(s=>s.properties.title===CATALOG_TAB)) return true;
+    const bu = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`,{
+      method:'POST',
+      headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ requests:[{ addSheet:{ properties:{ title:CATALOG_TAB } } }] }),
+    });
+    if(!bu.ok) return false;
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(CATALOG_TAB+'!A1:F1')}?valueInputOption=RAW`,{
+      method:'PUT',
+      headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ values:[['ID','Section','Label','Rate','Active','Created At']] }),
+    });
+    return true;
+  }catch(e){ return false; }
+}
+async function loadCatalog(){
+  if(!ctx.active || !token()) return;
+  try{
+    const ok = await ensureCatalogSheet();
+    if(!ok) return;
+    const range = encodeURIComponent(`${CATALOG_TAB}!A2:F`);
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}`,
+      { headers:{ Authorization:'Bearer '+token() } });
+    if(!r.ok) return;
+    const { values=[] } = await r.json();
+    const next = { prod:[], staff:[] };
+    values.forEach((row,i)=>{
+      const [id,section,label,rate,active] = row;
+      if(!id || !label) return;
+      if((active||'').toString().toUpperCase()!=='TRUE') return;
+      const item = { rowIndex:i+2, id, label, rate:parseFloat(rate)||0 };
+      if(section==='prod') next.prod.push(item);
+      else if(section==='staff') next.staff.push(item);
+    });
+    catalog = next;
+    if(window.Portal && Portal._refreshControls) Portal._refreshControls();
+  }catch(e){ /* catalog is a convenience -- fail quietly, defaults still work */ }
+}
+function getCatalog(){ return catalog; }
+async function persistCatalogItem(section,label,rate){
+  if(!ctx.active || !token()) return;
+  const dupe = (catalog[section]||[]).some(c=>c.label.trim().toLowerCase()===label.trim().toLowerCase());
+  if(dupe) return;
+  const id = 'li_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  try{
+    const ok = await ensureCatalogSheet();
+    if(!ok) return;
+    const range = encodeURIComponent(`${CATALOG_TAB}!A:F`);
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{
+      method:'POST',
+      headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ values:[[id,section,label,rate,'TRUE',new Date().toISOString()]] }),
+    });
+    if(!r.ok) return;
+    const j = await r.json();
+    const m = /![A-Z]+(\d+):/.exec((j.updates&&j.updates.updatedRange)||'');
+    catalog[section].push({ rowIndex: m?parseInt(m[1],10):null, id, label, rate });
+    if(window.Portal && Portal._refreshControls) Portal._refreshControls();
+  }catch(e){ /* item still works in this quote even if the catalog write failed */ }
+}
+async function deleteCatalogItem(section,id){
+  const item = (catalog[section]||[]).find(c=>c.id===id);
+  if(!item || !item.rowIndex || !token()) return;
+  try{
+    const range = encodeURIComponent(`${CATALOG_TAB}!E${item.rowIndex}`);
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueInputOption=RAW`,{
+      method:'PUT',
+      headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ values:[['FALSE']] }),
+    });
+    if(!r.ok) return;
+    catalog[section] = catalog[section].filter(c=>c.id!==id);
+    if(window.Portal && Portal._refreshControls) Portal._refreshControls();
+  }catch(e){}
+}
+
+/* ---- calendar cross-reference: does the requested date already have events? ---- */
+// Excludes this deal's own hold (ctx.calendarEventId) so a date a client
+// already has held with us doesn't get flagged as its own conflict.
+async function checkDateAvailability(dateStr){
+  const startISO = isoNY(dateStr, '12:00 AM');
+  const endISO   = isoNY(addDay(dateStr), '12:00 AM');
+  if(!startISO || !endISO) return [];
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events`+
+    `?timeMin=${encodeURIComponent(startISO)}&timeMax=${encodeURIComponent(endISO)}`+
+    `&singleEvents=true&orderBy=startTime`;
+  const r = await fetch(url, { headers:{ Authorization:'Bearer '+token() } });
+  if(r.status===401){ throw new Error('Sign-in expired'); }
+  if(!r.ok) throw new Error('Calendar API '+r.status);
+  const j = await r.json();
+  return (j.items||[])
+    .filter(ev => ev.status!=='cancelled' && ev.id!==ctx.calendarEventId)
+    .map(ev => ({ title: ev.summary || '(untitled event)', link: ev.htmlLink || '' }));
+}
+let dateCheckTimer=null, dateCheckSeq=0, lastAvailHtml='';
+function onDateInput(val){
+  Portal.set('event.date', val, 'quote');
+  const di=gid('eventDateInput'); if(di && document.activeElement!==di) di.value=val||'';
+  scheduleDateCheck(val);
+}
+function scheduleDateCheck(val){
+  clearTimeout(dateCheckTimer);
+  dateCheckTimer=setTimeout(()=>runDateCheck(val),500);
+}
+function paintAvail(html){ lastAvailHtml=html; const el=gid('dateAvail'); if(el) el.innerHTML=html; }
+function repaintDateAvail(){ const el=gid('dateAvail'); if(el) el.innerHTML=lastAvailHtml; }
+async function runDateCheck(dateStr){
+  if(!dateStr){ paintAvail(''); return; }
+  if(!ctx.active || !token()){ paintAvail(''); return; } // no calendar access outside hub context
+  const mySeq = ++dateCheckSeq;
+  paintAvail('<span class="avail-checking">Checking calendar…</span>');
+  try{
+    const events = await checkDateAvailability(dateStr);
+    if(mySeq!==dateCheckSeq) return; // superseded by a newer date edit
+    if(!events.length){
+      paintAvail('<span class="avail-ok">✓ Date is open on the calendar</span>');
+    }else{
+      paintAvail(
+        `<span class="avail-conflict">⚠ ${events.length} event${events.length>1?'s':''} already on this date</span>`+
+        `<ul class="avail-list">${events.map(e=>e.link
+          ? `<li><a href="${e.link}" target="_blank" rel="noopener">${esc(e.title)} →</a></li>`
+          : `<li>${esc(e.title)}</li>`).join('')}</ul>`
+      );
+    }
+  }catch(err){
+    if(mySeq===dateCheckSeq) paintAvail(`<span class="avail-err">Could not check calendar${err.message?' — '+esc(err.message):''}</span>`);
+  }
+}
+
 function handoff(key, payload){
   sessionStorage.setItem(key, JSON.stringify(payload));
   const p=prefill()||{};
@@ -1436,7 +1773,7 @@ async function saveQuote(withEmail){
       const t=Portal._quoteTotals();
       const pdfB64 = await pdfFromElement('quoteDoc');
       const [cal]=await Promise.all([
-        calendarEventId?Promise.resolve({id:calendarEventId}):createHold(),
+        createHold(),
         gmailDraft(
           S.client.email,
           `Carriage House: Quote for ${S.event.name||'Your Event'} on ${longDate(S.event.date)}`,
@@ -1470,11 +1807,13 @@ async function saveQuote(withEmail){
 async function saveContract(withEmail){
   if(!requireHub()) return;
   const S=Portal._S();
+  let calendarEventId=ctx.calendarEventId||'';
   if(withEmail){
     if(!token()){ alert('Not signed in. Return to the hub and sign in.'); return; }
     busy('Updating hold & drafting email…');
     try{
-      await patchHold();
+      const hold=await patchHold();
+      if(hold&&hold.id) calendarEventId=hold.id;
       const x=Portal._contractCtx();
       const pdfB64 = await pdfFromElement('contractDoc');
       await gmailDraft(
@@ -1496,7 +1835,7 @@ async function saveContract(withEmail){
     }catch(err){ busy(''); alert('Contract will still be saved, but: '+err.message); }
     busy('');
   }
-  handoff('170e_contract_result',{ rowIndex:ctx.rowIndex, refId:ctx.refId, quoteDataJson:quoteDataJson() });
+  handoff('170e_contract_result',{ rowIndex:ctx.rowIndex, refId:ctx.refId, quoteDataJson:quoteDataJson(), calendarEventId });
 }
 // Shared path for templates that only create a Gmail draft -- no Sheet write,
 // no calendar action, no status change. `opts.attachPdf` (an element id) is
@@ -1679,7 +2018,13 @@ let busyMsg='';
 function busy(m){ busyMsg=m; renderBar(); }
 function renderBar(){
   const bar=gid('hubbar'); if(!bar) return;
-  if(!ctx.active){ bar.innerHTML=''; return; }
+  if(!ctx.active){
+    // Quick-tool / standalone mode (opened via "New deal" or the hub's
+    // no-inquiry shortcut): no Sheet-backed actions apply, but there's still
+    // a hub to go back to.
+    bar.innerHTML=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>`;
+    return;
+  }
   const stage=Portal._S().stage;
   if(busyMsg){ bar.innerHTML=`<span class="ref-chip">${esc(busyMsg)}</span>`; return; }
   let btns=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>`;
@@ -1722,16 +2067,26 @@ function start(){
     });
   }
   state.deal.ref = ctx.refId || state.deal.ref;
+  // The AL column (event title) is the freshest source of truth for the title
+  // specifically -- it wins even over an older saved quote snapshot, since an
+  // inline title edit doesn't require re-saving the quote to persist.
+  if(ctx.inquiry && ctx.inquiry.eventTitle) state.event.name = ctx.inquiry.eventTitle;
   Portal._load(state);
+  syncTitleInputs(state.event.name);
   if(p.stage) Portal.go(p.stage);
   renderBar();
+  loadCatalog();
+  if(state.event.date) runDateCheck(state.event.date);
 }
 
 // keep the bar in sync when the user switches stages
 const _go = Portal.go;
 Portal.go = function(s){ _go(s); renderBar(); };
 
-return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, sendFollowUp, sendNoDate, sendPaymentReminder, sendThankYou, _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText, _draftOnly:draftOnly };
+return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, sendFollowUp, sendNoDate, sendPaymentReminder, sendThankYou,
+  onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, deleteCatalogItem,
+  onDateInput, repaintDateAvail, checkDateAvailability,
+  _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText, _draftOnly:draftOnly };
 })();
 window.Hub = Hub;
 Hub.start();
