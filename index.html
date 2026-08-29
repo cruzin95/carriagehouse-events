@@ -127,6 +127,17 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .d-services{font-size:.78rem;color:var(--ink2);line-height:1.7}
 .d-notes{font-size:.82rem;color:var(--ink2);line-height:1.65;font-style:italic}
 
+/* ---- detail panel: edit mode ---- */
+.d-edit-row{margin-bottom:10px}
+.d-edit-row:last-child{margin-bottom:0}
+.d-edit-label{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.d-edit-inp{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:5px;padding:7px 9px;font-size:.83rem;color:var(--ink);font-family:var(--body);outline:none;transition:border-color .15s}
+.d-edit-inp:focus{border-color:var(--amber-dim)}
+.d-edit-textarea{min-height:70px;resize:vertical;line-height:1.5}
+.d-edit-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.d-edit-actions{display:flex;gap:8px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.d-edit-actions .action-btn{flex:1}
+
 /* ---- calendar availability cross-reference ---- */
 .d-avail{margin-top:2px;padding-top:6px;font-family:var(--mono);font-size:.75rem;letter-spacing:.02em;line-height:1.7}
 .d-avail:empty{display:none}
@@ -362,7 +373,10 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
           <div class="d-name" id="d-name"></div>
           <div id="d-status-badge" class="d-status-badge"></div>
         </div>
-        <button class="detail-close" onclick="closeDetailPanel()">×</button>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="header-btn" id="detail-edit-btn" onclick="toggleDetailEdit()">Edit</button>
+          <button class="detail-close" onclick="closeDetailPanel()">×</button>
+        </div>
       </div>
       <div class="detail-body" id="detail-body"></div>
       <div class="detail-footer">
@@ -441,6 +455,7 @@ let starredIds = {}; // { refId: true }
 let followups  = {}; // { refId: 'YYYY-MM-DD' }
 let showDead   = false; // Dead column hidden by default each session
 let showStale  = false; // Stale column hidden by default each session
+let detailEditMode = false; // whether the detail panel's Contact/Event/Logistics/Budget fields are editable
 
 // ── ACCESS GATE ─────────────────────────────────────────────────────────
 // A soft deterrent, not real security: this all runs in the browser, so
@@ -685,6 +700,24 @@ async function writeRow(rowIndex, values) {
   return resp.ok;
 }
 
+// Writes the A:Y intake-field range (Contact/Event/Logistics/Budget/Notes) --
+// the original fields the intake form captures, as opposed to writeRow()'s
+// Z:AK hub-managed range. Used by the detail panel's edit mode. `values`
+// must be 25 entries starting with timestamp, refId.
+async function writeInquiryFields(rowIndex, values) {
+  const range = encodeURIComponent(`${CONFIG.TAB}!A${rowIndex}:Y${rowIndex}`);
+  const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
+
+  const resp = await fetch(url, {
+    method:  'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ values: [values] }),
+  });
+
+  if (resp.status === 401) { handleAuthExpired(); return false; }
+  return resp.ok;
+}
+
 // ── PENDING WRITES (from returning from quote/contract) ───────────────
 
 function processPendingWrites() {
@@ -881,6 +914,8 @@ function renderCard(inq) {
 function openDetail(refId) {
   selected = inquiries.find(i => i.refId === refId);
   if (!selected) return;
+  detailEditMode = false;
+  document.getElementById('detail-edit-btn').style.display = '';
 
   document.getElementById('d-ref').textContent  = selected.refId;
   document.getElementById('d-name').textContent = `${selected.firstName} ${selected.lastName}`.trim();
@@ -992,6 +1027,125 @@ function closeDetailPanel() {
   document.getElementById('detail-overlay').classList.add('hidden');
   document.body.style.overflow = '';
   selected = null;
+}
+
+// ── DETAIL PANEL: EDIT MODE ─────────────────────────────────────────────
+// Lets Contact/Event/Logistics/Budget fields (columns A:Y -- the intake
+// form's own fields) be corrected or filled in later, for deals where more
+// info comes in after the fact or something changes. Plain text inputs
+// throughout rather than replicating inquiry.html's exact dropdown choices,
+// since free text covers corrections just as well with far less to keep in
+// sync between the two files.
+function renderDetailBodyEdit(inq) {
+  const field = (id, label, value, type) => `
+    <div class="d-edit-row">
+      <label class="d-edit-label">${label}</label>
+      <input class="d-edit-inp" id="edit-${id}" type="${type || 'text'}" value="${escHtml(value || '')}">
+    </div>`;
+
+  return `
+    <div class="d-section">
+      <div class="d-section-title">Contact</div>
+      <div class="d-edit-grid2">
+        ${field('firstName', 'First name', inq.firstName)}
+        ${field('lastName', 'Last name', inq.lastName)}
+      </div>
+      ${field('email', 'Email', inq.email, 'email')}
+      ${field('phone', 'Phone', inq.phone, 'tel')}
+      ${field('company', 'Company', inq.company)}
+      ${field('referral', 'Referred by', inq.referral)}
+    </div>
+
+    <div class="d-section">
+      <div class="d-section-title">Event</div>
+      ${field('eventType', 'Type', inq.eventType)}
+      ${field('eventDate', 'Date', inq.eventDate, 'date')}
+      <div class="d-edit-grid2">
+        ${field('doorsOpen', 'Doors open', inq.doorsOpen)}
+        ${field('doorsClose', 'Doors close', inq.doorsClose)}
+      </div>
+      ${field('guestCount', 'Guests', inq.guestCount)}
+      ${field('rooftop', 'Rooftop', inq.rooftop)}
+      ${field('outsideVendors', 'Outside vendors', inq.outsideVendors)}
+    </div>
+
+    <div class="d-section">
+      <div class="d-section-title">Logistics</div>
+      ${field('servicesNeeded', 'Services', inq.servicesNeeded)}
+      ${field('doorStaff', 'Door staff', inq.doorStaff)}
+      ${field('guestMethod', 'Guest method', inq.guestMethod)}
+      ${field('publicEvent', 'Public event', inq.publicEvent)}
+      ${field('alcohol', 'Alcohol', inq.alcohol)}
+      ${field('ageReq', 'Age req.', inq.ageReq)}
+      ${field('insurance', 'Insurance', inq.insurance)}
+    </div>
+
+    <div class="d-section">
+      <div class="d-section-title">Budget</div>
+      ${field('budget', 'Range', inq.budget)}
+      ${field('payMethod', 'Payment', inq.payMethod)}
+    </div>
+
+    <div class="d-section">
+      <div class="d-section-title">Notes</div>
+      <textarea class="d-edit-inp d-edit-textarea" id="edit-notes">${escHtml(inq.notes || '')}</textarea>
+    </div>
+
+    <div class="d-edit-actions">
+      <button class="action-btn secondary" onclick="cancelDetailEdit()">Cancel</button>
+      <button class="action-btn primary" onclick="saveDetailEdits()">Save changes</button>
+    </div>
+  `;
+}
+
+function toggleDetailEdit() {
+  if (!selected) return;
+  detailEditMode = true;
+  document.getElementById('detail-body').innerHTML = renderDetailBodyEdit(selected);
+  document.getElementById('detail-edit-btn').style.display = 'none';
+}
+
+function cancelDetailEdit() {
+  detailEditMode = false;
+  document.getElementById('detail-body').innerHTML = renderDetailBody(selected);
+  document.getElementById('detail-edit-btn').style.display = '';
+}
+
+async function saveDetailEdits() {
+  if (!selected) return;
+  const inq = inquiries.find(i => i.refId === selected.refId);
+  if (!inq) return;
+
+  const val = id => document.getElementById('edit-' + id).value.trim();
+  const updated = {
+    firstName: val('firstName'), lastName: val('lastName'), email: val('email'), phone: val('phone'),
+    company: val('company'), referral: val('referral'), eventType: val('eventType'), eventDate: val('eventDate'),
+    doorsOpen: val('doorsOpen'), doorsClose: val('doorsClose'), guestCount: val('guestCount'),
+    doorStaff: val('doorStaff'), rooftop: val('rooftop'), servicesNeeded: val('servicesNeeded'),
+    outsideVendors: val('outsideVendors'), guestMethod: val('guestMethod'), publicEvent: val('publicEvent'),
+    alcohol: val('alcohol'), ageReq: val('ageReq'), insurance: val('insurance'), budget: val('budget'),
+    payMethod: val('payMethod'), notes: val('notes'),
+  };
+  const row = [
+    inq.timestamp || new Date().toISOString(), inq.refId,
+    updated.firstName, updated.lastName, updated.email, updated.phone, updated.company, updated.referral,
+    updated.eventType, updated.eventDate, updated.doorsOpen, updated.doorsClose, updated.guestCount,
+    updated.doorStaff, updated.rooftop, updated.servicesNeeded, updated.outsideVendors, updated.guestMethod,
+    updated.publicEvent, updated.alcohol, updated.ageReq, updated.insurance, updated.budget, updated.payMethod,
+    updated.notes,
+  ];
+
+  const ok = await writeInquiryFields(inq.rowIndex, row);
+  if (!ok) { showToast('Could not save changes'); return; }
+
+  Object.assign(inq, updated);
+  detailEditMode = false;
+  document.getElementById('d-name').textContent = `${inq.firstName} ${inq.lastName}`.trim();
+  document.getElementById('detail-body').innerHTML = renderDetailBody(inq);
+  document.getElementById('detail-edit-btn').style.display = '';
+  refreshDetailAvailability(inq); // event date may have changed
+  renderBoard(); // card name/date/type/guests may have changed
+  showToast('Inquiry info updated');
 }
 
 async function changeStatus() {

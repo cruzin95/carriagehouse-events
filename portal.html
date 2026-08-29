@@ -255,6 +255,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
 .inq-close{width:30px;height:30px;border-radius:5px;border:1px solid var(--line-2);background:transparent;color:var(--muted);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.14s;flex-shrink:0;line-height:1}
 .inq-close:hover{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--ink)}
 .inq-body{flex:1;overflow-y:auto;padding:18px 20px}
+.inq-edit-actions{display:flex;gap:8px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 .inq-sec{margin-bottom:18px}
 .inq-sec-t{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--line)}
 .inq-sec-t::before{content:"// ";color:var(--amber-dim)}
@@ -345,7 +346,10 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
   <div class="inq-panel">
     <div class="inq-head">
       <div><div class="t" id="inqPanelName">Inquiry</div><div class="ref" id="inqPanelRef"></div></div>
-      <button class="inq-close" onclick="Hub.toggleInquiryPanel()">&times;</button>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button class="io-btn" id="inqEditBtn" onclick="Hub.toggleInquiryEdit()">Edit</button>
+        <button class="inq-close" onclick="Hub.toggleInquiryPanel()">&times;</button>
+      </div>
     </div>
     <div class="inq-body" id="inqBody"></div>
   </div>
@@ -394,7 +398,7 @@ function freshState(){
   const ref = 'CH-'+yr+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
   return {
     deal:{ ref, created:new Date().toISOString().slice(0,10) },
-    client:{ name:'', company:'', email:'' },
+    client:{ name:'', company:'', email:'', phone:'' },
     event:{ name:'', date:'', guests:150, hours:6, staffHours:7, loadInHours:1 },
     venue:{ tier:'t150', cleaning:350, customBase:null },
     sec:{ prod:true, staff:true },
@@ -577,6 +581,10 @@ function renderQuoteControls(){
       <div class="row2">
         <div class="field"><label>Client name</label><input class="inp" value="${esc(S.client.name)}" oninput="Portal.set('client.name',this.value,'quote')"></div>
         <div class="field"><label>Company</label><input class="inp" value="${esc(S.client.company)}" oninput="Portal.set('client.company',this.value,'quote')"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Email</label><input class="inp" type="email" value="${esc(S.client.email)}" oninput="Portal.set('client.email',this.value,'quote')"></div>
+        <div class="field"><label>Phone</label><input class="inp" type="tel" value="${esc(S.client.phone)}" oninput="Portal.set('client.phone',this.value,'quote')"></div>
       </div>
       <div class="field"><label>Event name</label><input class="inp" value="${esc(S.event.name)}" oninput="Hub.onTitleInput(this.value)" onblur="Hub.flushTitleSave(this.value)"></div>
       <div class="row2">
@@ -1751,6 +1759,80 @@ async function runDateCheck(dateStr){
   }
 }
 
+/* ---- create a new hub card from the quick tool: for events that never came ---- */
+/* ---- through the intake form (walk-ins, phone bookings, favors, etc.)   ---- */
+// Matches inquiry.html's own refId format exactly -- the hub only shows rows
+// whose refId starts with "EVT-", so this has to follow the same pattern or
+// the new card would silently never appear on the board.
+function generateRefId(){
+  const d = new Date();
+  const stamp = d.toISOString().slice(0,10).replace(/-/g,'');
+  const suffix = Math.random().toString(36).slice(2,6).toUpperCase();
+  return `EVT-${stamp}-${suffix}`;
+}
+async function createHubCard(){
+  if(ctx.active){ Portal._toast('Already saved to the hub.'); return; }
+  if(!token()){ alert('Not signed in. Return to the hub and sign in, then come back to the quick tool.'); return; }
+  const S=Portal._S();
+  const name=(S.client.name||'').trim();
+  if(!name){ alert('Add a client name before saving to the hub.'); return; }
+  const parts=name.split(/\s+/);
+  const firstName=parts[0]||'', lastName=parts.slice(1).join(' ')||'';
+  const refId=generateRefId(), timestamp=new Date().toISOString();
+  const hasInvoice = S.invoice.items && S.invoice.items.length>0;
+  const status = hasInvoice ? 'invoiced' : 'quoted';
+  const t = Portal._quoteTotals();
+  const iv = hasInvoice ? Portal._invoiceTotals() : null;
+
+  // Columns A:Y (intake-form fields) -- most are blank since this bypasses
+  // the intake form entirely; the ones that matter to the hub board are
+  // filled from what's already in the portal. Notes flags it as off-pipeline
+  // so it's clear at a glance later why so much is blank.
+  const introRow = [
+    timestamp, refId, firstName, lastName,
+    S.client.email||'', S.client.phone||'', S.client.company||'', '',
+    S.event.name||'', S.event.date||'', '', '',
+    S.event.guests||'', '', '', '', '', '', '', '', '', '', '', '',
+    'Created from the quick tool (off-pipeline entry).',
+  ];
+  // Columns Z:AL (hub-managed) -- same order as COL in index.html.
+  const hubRow = [
+    status, t.grand, quoteDataJson(), '', user()||'', '',
+    hasInvoice?invoiceDataJson():'', hasInvoice?iv.items:'', '', '',
+    timestamp, '', S.event.name||'',
+  ];
+
+  const range = encodeURIComponent(`${INQ_TAB}!A:AL`);
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{
+    method:'POST',
+    headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+    body: JSON.stringify({ values:[[...introRow, ...hubRow]] }),
+  });
+  if(r.status===401){ alert('Sign-in expired. Return to the hub and sign in, then come back to the quick tool.'); return; }
+  if(!r.ok){ const e=await r.json().catch(()=>({})); alert('Could not save to the hub: '+(e.error?.message||r.status)); return; }
+  const j = await r.json();
+  const m = /![A-Z]+(\d+):/.exec((j.updates&&j.updates.updatedRange)||'');
+  const rowIndex = m ? parseInt(m[1],10) : null;
+  if(!rowIndex){ alert('Card was saved, but its row could not be located -- refresh the hub to see it.'); return; }
+
+  // Adopt hub-tracked mode for the rest of this session, same shape start()
+  // builds from a normal hub handoff, so every other Save/Email/Calendar
+  // action works immediately without navigating away and back.
+  ctx = { active:true, rowIndex, refId, token:token(), calendarEventId:'',
+    inquiry:{ refId, timestamp, firstName, lastName, email:S.client.email||'', phone:S.client.phone||'',
+      company:S.client.company||'', eventType:S.event.name||'', eventDate:S.event.date||'',
+      guestCount:S.event.guests||'', status, calendarEventId:'',
+      notes:'Created from the quick tool (off-pipeline entry).' } };
+  S.deal.ref = refId;
+  const p={ source:'hub', stage:S.stage, refId, rowIndex, inquiry:ctx.inquiry,
+    quote:null, invoice:null, token:token(), calendarEventId:'', portalState:S };
+  sessionStorage.setItem('170e_prefill', JSON.stringify(p));
+  Portal._boot(); // full re-render so the ref chip and doc headers pick up the new EVT- ref
+  loadCatalog();
+  if(S.event.date) runDateCheck(S.event.date);
+  Portal._toast('Saved to hub as '+refId);
+}
+
 function handoff(key, payload){
   sessionStorage.setItem(key, JSON.stringify(payload));
   const p=prefill()||{};
@@ -1764,6 +1846,7 @@ function requireHub(){ if(!ctx.active){ alert('Open this from the hub to save to
 /* ---- actions ---- */
 async function saveQuote(withEmail){
   if(!requireHub()) return;
+  syncCoreInquiryFields();
   const S=Portal._S();
   let calendarEventId=ctx.calendarEventId||'';
   if(withEmail){
@@ -1806,6 +1889,7 @@ async function saveQuote(withEmail){
 }
 async function saveContract(withEmail){
   if(!requireHub()) return;
+  syncCoreInquiryFields();
   const S=Portal._S();
   let calendarEventId=ctx.calendarEventId||'';
   if(withEmail){
@@ -1923,6 +2007,7 @@ async function sendThankYou(){
 
 async function saveInvoice(withEmail){
   if(!requireHub()) return;
+  syncCoreInquiryFields();
   const S=Portal._S();
   const t=Portal._invoiceTotals();
   if(withEmail){
@@ -1960,11 +2045,61 @@ function backToHub(){
   window.location.href='index.html';
 }
 
+/* ---- write the A:Y intake-field range directly from the portal ---- */
+// Mirrors index.html's writeInquiryFields(), but keyed off ctx.rowIndex/
+// ctx.refId since the portal only ever has the one deal open, not a full
+// inquiries array. `overrides` supplies the fields actually being changed;
+// anything else falls back to ctx.inquiry's last known value, so a save
+// from here never blanks out fields only the hub's edit form touches, and
+// vice versa.
+async function writeInquiryFields(overrides){
+  if(!ctx.active || !token()) return false;
+  const inq = ctx.inquiry || {};
+  const pick = k => (overrides && overrides[k]!==undefined) ? overrides[k] : (inq[k]||'');
+  const timestamp = inq.timestamp || new Date().toISOString();
+  const row = [
+    timestamp, ctx.refId,
+    pick('firstName'), pick('lastName'), pick('email'), pick('phone'), pick('company'), pick('referral'),
+    pick('eventType'), pick('eventDate'), pick('doorsOpen'), pick('doorsClose'), pick('guestCount'),
+    pick('doorStaff'), pick('rooftop'), pick('servicesNeeded'), pick('outsideVendors'), pick('guestMethod'),
+    pick('publicEvent'), pick('alcohol'), pick('ageReq'), pick('insurance'), pick('budget'), pick('payMethod'),
+    pick('notes'),
+  ];
+  try{
+    const range = encodeURIComponent(`${INQ_TAB}!A${ctx.rowIndex}:Y${ctx.rowIndex}`);
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueInputOption=RAW`,{
+      method:'PUT',
+      headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ values:[row] }),
+    });
+    if(!r.ok) return false;
+    ctx.inquiry = Object.assign({}, inq, overrides||{}, { timestamp });
+    return true;
+  }catch(e){ return false; }
+}
+// Piggybacks on every Save Quote/Contract/Invoice: keeps the canonical
+// Contact/Event fields the Quote panel also edits (name, email, phone,
+// company, date, guests) in sync with the A:Y columns, so an edit made
+// while building a quote doesn't silently only live in the quote snapshot.
+// Best-effort -- a sync failure here should never block the actual save.
+async function syncCoreInquiryFields(){
+  try{
+    const S=Portal._S();
+    const parts=(S.client.name||'').trim().split(/\s+/);
+    await writeInquiryFields({
+      firstName: parts[0]||'', lastName: parts.slice(1).join(' ')||'',
+      email: S.client.email||'', phone: S.client.phone||'', company: S.client.company||'',
+      eventDate: S.event.date||'', guestCount: S.event.guests||'',
+    });
+  }catch(e){}
+}
+
 /* ---- inquiry reference panel ---- */
+let inqEditMode=false;
 function toggleInquiryPanel(){
   const ov=gid('inqOverlay'); if(!ov) return;
   const opening = ov.classList.contains('hidden');
-  if(opening) renderInquiryPanel();
+  if(opening){ inqEditMode=false; renderInquiryPanel(); }
   ov.classList.toggle('hidden', !opening);
 }
 function renderInquiryPanel(){
@@ -2011,6 +2146,103 @@ function renderInquiryPanel(){
   gid('inqPanelName').textContent = name;
   gid('inqPanelRef').textContent = ctx.refId || '';
   gid('inqBody').innerHTML = body;
+  const btn=gid('inqEditBtn'); if(btn) btn.style.display = ctx.active ? '' : 'none';
+}
+
+// Same field set as the hub's detail-panel edit form, plain text inputs
+// throughout (see renderDetailBodyEdit() in index.html for why).
+function renderInquiryPanelEdit(inq){
+  const field=(id,label,value,type)=>`
+    <div class="field"><label>${esc(label)}</label><input class="inp" id="inqEdit-${id}" type="${type||'text'}" value="${esc(value||'')}"></div>`;
+  return `
+    <div class="inq-sec">
+      <div class="inq-sec-t">Contact</div>
+      <div class="row2">
+        ${field('firstName','First name',inq.firstName)}
+        ${field('lastName','Last name',inq.lastName)}
+      </div>
+      ${field('email','Email',inq.email,'email')}
+      ${field('phone','Phone',inq.phone,'tel')}
+      ${field('company','Company',inq.company)}
+      ${field('referral','Referred by',inq.referral)}
+    </div>
+    <div class="inq-sec">
+      <div class="inq-sec-t">Event</div>
+      ${field('eventType','Type',inq.eventType)}
+      ${field('eventDate','Date',inq.eventDate,'date')}
+      <div class="row2">
+        ${field('doorsOpen','Doors open',inq.doorsOpen)}
+        ${field('doorsClose','Doors close',inq.doorsClose)}
+      </div>
+      ${field('guestCount','Guests',inq.guestCount)}
+      ${field('rooftop','Rooftop',inq.rooftop)}
+      ${field('outsideVendors','Outside vendors',inq.outsideVendors)}
+    </div>
+    <div class="inq-sec">
+      <div class="inq-sec-t">Logistics</div>
+      ${field('servicesNeeded','Services',inq.servicesNeeded)}
+      ${field('doorStaff','Door staff',inq.doorStaff)}
+      ${field('guestMethod','Guest method',inq.guestMethod)}
+      ${field('publicEvent','Public event',inq.publicEvent)}
+      ${field('alcohol','Alcohol',inq.alcohol)}
+      ${field('ageReq','Age req.',inq.ageReq)}
+      ${field('insurance','Insurance',inq.insurance)}
+    </div>
+    <div class="inq-sec">
+      <div class="inq-sec-t">Budget</div>
+      ${field('budget','Range',inq.budget)}
+      ${field('payMethod','Payment',inq.payMethod)}
+    </div>
+    <div class="inq-sec">
+      <div class="inq-sec-t">Notes</div>
+      <textarea class="inp" id="inqEdit-notes" style="min-height:70px">${esc(inq.notes||'')}</textarea>
+    </div>
+    <div class="inq-edit-actions">
+      <button class="act" onclick="Hub.cancelInquiryEdit()">Cancel</button>
+      <button class="act primary" onclick="Hub.saveInquiryEdits()">Save changes</button>
+    </div>
+  `;
+}
+function toggleInquiryEdit(){
+  if(!ctx.active) return;
+  inqEditMode=true;
+  gid('inqBody').innerHTML = renderInquiryPanelEdit(ctx.inquiry||{});
+  gid('inqEditBtn').style.display='none';
+}
+function cancelInquiryEdit(){
+  inqEditMode=false;
+  renderInquiryPanel();
+}
+async function saveInquiryEdits(){
+  const val=id=>{ const el=gid('inqEdit-'+id); return el?el.value.trim():''; };
+  const updated={
+    firstName:val('firstName'), lastName:val('lastName'), email:val('email'), phone:val('phone'),
+    company:val('company'), referral:val('referral'), eventType:val('eventType'), eventDate:val('eventDate'),
+    doorsOpen:val('doorsOpen'), doorsClose:val('doorsClose'), guestCount:val('guestCount'),
+    doorStaff:val('doorStaff'), rooftop:val('rooftop'), servicesNeeded:val('servicesNeeded'),
+    outsideVendors:val('outsideVendors'), guestMethod:val('guestMethod'), publicEvent:val('publicEvent'),
+    alcohol:val('alcohol'), ageReq:val('ageReq'), insurance:val('insurance'), budget:val('budget'),
+    payMethod:val('payMethod'), notes:val('notes'),
+  };
+  const ok = await writeInquiryFields(updated);
+  if(!ok){ alert('Could not save changes.'); return; }
+
+  // Keep the quote-building side in sync too, so corrected contact info,
+  // date, or guest count show up immediately in the documents and emails
+  // without needing a separate save.
+  const S=Portal._S();
+  const name=[updated.firstName,updated.lastName].filter(Boolean).join(' ');
+  if(name) S.client.name=name;
+  S.client.email=updated.email; S.client.phone=updated.phone; S.client.company=updated.company;
+  if(updated.eventDate) S.event.date=updated.eventDate;
+  const g=parseInt(updated.guestCount,10);
+  if(!isNaN(g) && g>0) S.event.guests=g;
+
+  inqEditMode=false;
+  Portal._boot();
+  renderInquiryPanel();
+  if(updated.eventDate) runDateCheck(updated.eventDate);
+  Portal._toast('Inquiry info updated');
 }
 
 /* ---- UI ---- */
@@ -2020,9 +2252,11 @@ function renderBar(){
   const bar=gid('hubbar'); if(!bar) return;
   if(!ctx.active){
     // Quick-tool / standalone mode (opened via "New deal" or the hub's
-    // no-inquiry shortcut): no Sheet-backed actions apply, but there's still
-    // a hub to go back to.
-    bar.innerHTML=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>`;
+    // no-inquiry shortcut): no Sheet-backed actions apply yet, but there's
+    // still a hub to go back to, and a way to register this deal as a new
+    // tracked card for events that never came through the intake form.
+    bar.innerHTML=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>
+      <button class="io-btn" onclick="Hub.createHubCard()">Save as new card</button>`;
     return;
   }
   const stage=Portal._S().stage;
@@ -2085,7 +2319,8 @@ Portal.go = function(s){ _go(s); renderBar(); };
 
 return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, sendFollowUp, sendNoDate, sendPaymentReminder, sendThankYou,
   onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, deleteCatalogItem,
-  onDateInput, repaintDateAvail, checkDateAvailability,
+  onDateInput, repaintDateAvail, checkDateAvailability, createHubCard,
+  toggleInquiryEdit, saveInquiryEdits, cancelInquiryEdit,
   _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText, _draftOnly:draftOnly };
 })();
 window.Hub = Hub;
