@@ -826,11 +826,24 @@ function renderBoard() {
   renderReminderBanner();
 }
 
+// The dollar figure that best represents a deal's value at its current
+// stage: once invoiced, the invoice total is more accurate/final than the
+// original quote (items or pricing may have moved since quoting, or the
+// deal may have gone straight to invoice without ever saving a quote).
+// Everywhere else, the quote total is what's on file.
+function dealValue(inq) {
+  if (inq.status === 'invoiced') {
+    const v = parseFloat(inq.invoiceTotal) || 0;
+    if (v > 0) return v;
+  }
+  return parseFloat(inq.quoteTotal) || 0;
+}
+
 function renderCard(inq) {
   const date      = fmtDateShort(inq.eventDate);
   const name      = `${inq.firstName} ${inq.lastName}`.trim() || '—';
   const ago       = timeAgo(inq.timestamp);
-  const hasQt     = inq.quoteTotal && parseFloat(inq.quoteTotal) > 0;
+  const hasQt     = dealValue(inq) > 0;
   const isStarred = !!starredIds[inq.refId];
   const followup  = followups[inq.refId];
   const today     = new Date().toISOString().split('T')[0];
@@ -857,7 +870,7 @@ function renderCard(inq) {
       <span>${date}</span>
       <span>${inq.guestCount || '?'} guests</span>
     </div>
-    ${hasQt ? `<div class="card-quote-total">$${Number(inq.quoteTotal).toLocaleString()}</div>` : ''}
+    ${hasQt ? `<div class="card-quote-total">$${dealValue(inq).toLocaleString()}</div>` : ''}
     ${followupHtml}
     ${inq.lastUpdatedBy ? `<div style="font-size:.65rem;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">↳ ${escHtml(inq.lastUpdatedBy)}</div>` : ''}
   </div>`;
@@ -909,7 +922,11 @@ function openDetail(refId) {
 
 function renderDetailBody(inq) {
   const date    = inq.eventDate ? new Date(inq.eventDate + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'}) : '—';
-  const hasQt   = inq.quoteTotal && parseFloat(inq.quoteTotal) > 0;
+  const qTotal  = parseFloat(inq.quoteTotal) || 0;
+  const iTotal  = parseFloat(inq.invoiceTotal) || 0;
+  const invoicedFigure = inq.status === 'invoiced' && iTotal > 0;
+  const boxTotal = invoicedFigure ? iTotal : qTotal;
+  const hasQt   = boxTotal > 0;
   const depAmt  = inq.quoteData?.deposit;
   const services = (inq.servicesNeeded || '').split(',').map(s => s.trim()).filter(Boolean);
 
@@ -961,9 +978,10 @@ function renderDetailBody(inq) {
 
     ${hasQt ? `
     <div class="d-section">
-      <div class="d-section-title">Quote on file</div>
+      <div class="d-section-title">${invoicedFigure ? 'Invoice on file' : 'Quote on file'}</div>
       <div class="quote-summary-box">
-        <div class="qs-total">$${Number(inq.quoteTotal).toLocaleString()}</div>
+        <div class="qs-total">$${boxTotal.toLocaleString()}</div>
+        ${(invoicedFigure && qTotal > 0 && qTotal !== iTotal) ? `<div class="qs-deposit">Quoted: $${qTotal.toLocaleString()}</div>` : ''}
         ${depAmt ? `<div class="qs-deposit">Deposit: $${Number(depAmt).toLocaleString()}</div>` : ''}
       </div>
     </div>` : ''}
@@ -1525,8 +1543,8 @@ function renderStats() {
   const quoted      = active.filter(i => i.status === 'quoted');
   const withQuote   = [...quoted, ...contracted];
 
-  const pipelineVal    = withQuote.reduce((s, i) => s + (parseFloat(i.quoteTotal) || 0), 0);
-  const contractedVal  = contracted.reduce((s, i) => s + (parseFloat(i.quoteTotal) || 0), 0);
+  const pipelineVal    = withQuote.reduce((s, i) => s + dealValue(i), 0);
+  const contractedVal  = contracted.reduce((s, i) => s + dealValue(i), 0);
   // Close rate = of everyone who actually got a quote, how many closed.
   // Deliberately excludes 'new' leads that haven't been quoted yet -- an
   // unprocessed inquiry isn't a failed conversion, it just hasn't had a
