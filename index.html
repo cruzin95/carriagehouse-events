@@ -99,6 +99,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .card-ago{font-family:var(--mono);font-size:.62rem;color:var(--muted-2)}
 .card-name{font-family:var(--body);font-size:.9rem;font-weight:500;color:var(--ink);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-type{font-size:.76rem;color:var(--muted);margin-bottom:8px}
+.repeat-tag{display:inline-flex;align-items:center;gap:2px;font-family:var(--mono);font-size:.58rem;letter-spacing:.04em;text-transform:uppercase;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-dim);padding:2px 6px;border-radius:99px;vertical-align:middle;margin-left:5px}
 .card-meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
 .card-quote-total{margin-top:8px;padding-top:8px;border-top:1px dotted var(--line-2);font-family:var(--mono);font-size:.82rem;font-weight:700;color:var(--amber)}
 
@@ -120,6 +121,31 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .detail-close{width:32px;height:32px;border-radius:5px;border:1px solid var(--line-2);background:transparent;color:var(--muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;line-height:1}
 .detail-close:hover{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--ink)}
 .detail-body{flex:1;overflow-y:auto;padding:20px 24px}
+
+/* ── internal review (rating, notes, problem-client flag) ── */
+.detail-review{padding:16px 24px;border-bottom:1px solid var(--line);background:var(--surface-2);flex-shrink:0}
+.review-warning{background:var(--red-soft);border:1px solid rgba(211,118,91,.4);border-radius:6px;padding:10px 12px;margin-bottom:14px}
+.warn-title{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;color:var(--red);margin-bottom:4px}
+.warn-item{font-size:.8rem;color:var(--ink2);line-height:1.5}
+.warn-ref{font-family:var(--mono);font-size:.68rem;color:var(--red)}
+.review-section-title{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2);margin-bottom:10px}
+.review-section-title .opt{color:var(--muted-2);font-weight:400;text-transform:none;letter-spacing:0}
+.rating-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.rating-label{font-size:.82rem;color:var(--ink2)}
+.star-rating{display:inline-flex;gap:2px}
+.rating-star{font-size:18px;color:var(--line-2);cursor:pointer;transition:color .12s;line-height:1}
+.rating-star.filled{color:var(--amber)}
+.rating-star:hover{color:var(--amber-dim)}
+.review-notes{width:100%;min-height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:6px;padding:9px 11px;font-size:.83rem;color:var(--ink);font-family:var(--body);outline:none;resize:vertical;transition:border-color .15s;margin-bottom:10px}
+.review-notes:focus{border-color:var(--amber-dim)}
+.review-notes::placeholder{color:var(--muted-2)}
+.problem-toggle{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--ink2);cursor:pointer;user-select:none}
+.problem-toggle input{accent-color:var(--red);width:15px;height:15px;cursor:pointer}
+.review-save-status{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+.review-save-status.saving{color:var(--muted)}
+.review-save-status.saved{color:var(--green)}
+.review-save-status.err{color:var(--red)}
+.flag-tag{display:inline-flex;align-items:center;gap:2px;font-family:var(--mono);font-size:.58rem;letter-spacing:.04em;text-transform:uppercase;color:var(--red);background:var(--red-soft);border:1px solid rgba(211,118,91,.4);padding:2px 6px;border-radius:99px;vertical-align:middle;margin-left:5px}
 .d-section{margin-bottom:20px}
 .d-section-title{font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
 .d-section-title::before{content:"// ";color:var(--amber-dim)}
@@ -384,11 +410,26 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
           <div class="d-ref" id="d-ref"></div>
           <div class="d-name" id="d-name"></div>
           <div id="d-status-badge" class="d-status-badge"></div>
+          <span id="d-repeat-tag"></span>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0">
           <button class="header-btn" id="detail-edit-btn" onclick="toggleDetailEdit()">Edit</button>
           <button class="detail-close" onclick="closeDetailPanel()">×</button>
         </div>
+      </div>
+      <div class="detail-review" id="detail-review">
+        <div class="review-warning" id="review-warning" style="display:none"></div>
+        <div class="review-section-title">Internal Review <span class="opt">staff only — never shown to the client</span></div>
+        <div class="rating-row">
+          <span class="rating-label">Event rating</span>
+          <span class="star-rating" id="star-rating"></span>
+          <span class="review-save-status" id="review-save-status"></span>
+        </div>
+        <textarea class="review-notes" id="review-notes" placeholder="What went well or poorly?" oninput="reviewNotesInput(this.value)" onblur="flushReviewSave()"></textarea>
+        <label class="problem-toggle">
+          <input type="checkbox" id="problem-checkbox" onchange="toggleProblemFlag()">
+          <span>⚠ Flag as problem client</span>
+        </label>
       </div>
       <div class="detail-body" id="detail-body"></div>
       <div class="detail-footer">
@@ -455,6 +496,14 @@ const COL = {
   // Written directly by portal.html (inline title edit), independent of the
   // Z:AK hub-managed batch write in writeRow() -- see EVENT_TITLE_COL there.
   eventTitle:37,
+  // Written by the intake form (inquiry.html) once Code.gs is updated to
+  // place it here -- see the note in computeRepeatFlags() below. Distinct
+  // from `referral === 'Past guest'`, which answers a different question.
+  returningClient:38,
+  // Staff-only internal review, written directly by this dashboard via
+  // writeInternalReview() -- a dedicated AN:AP write, separate from the
+  // Z:AK batch (see the comment on writeInternalReview for why).
+  eventRating:39, internalNotes:40, problemClient:41,
 };
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -577,7 +626,7 @@ async function loadInquiries() {
   setLoading(true);
   clearError();
   try {
-    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AL`);
+    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AP`);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}`;
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
@@ -608,6 +657,9 @@ async function loadInquiries() {
 
     // Auto-prioritize high-budget inquiries (>= $15k) that haven't been touched
     await applyAutoPrioritize();
+
+    repeatFlags = computeRepeatFlags();
+    problemFlags = computeProblemFlags();
 
     // Write back any pending data (from returning from quote/contract)
     await flushPendingWrites();
@@ -671,6 +723,10 @@ function parseRow(row, rowIndex) {
     lastActivityAt:  row[COL.lastActivityAt]   || '',
     lastAutoDraftAt: row[COL.lastAutoDraftAt]  || '',
     eventTitle:      row[COL.eventTitle]       || '',
+    returningClient: row[COL.returningClient]  === 'true',
+    eventRating:     parseInt(row[COL.eventRating], 10) || 0,
+    internalNotes:   row[COL.internalNotes]    || '',
+    problemClient:   row[COL.problemClient]    === 'true',
   };
 }
 
@@ -733,6 +789,25 @@ async function writeInquiryFields(rowIndex, values) {
     method:  'PUT',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body:    JSON.stringify({ values: [values] }),
+  });
+
+  if (resp.status === 401) { handleAuthExpired(); return false; }
+  return resp.ok;
+}
+
+// Writes the AN:AP internal-review range (event rating, internal notes,
+// problem-client flag). Kept as its own small write, separate from
+// writeRow()'s Z:AK batch and writeInquiryFields()'s A:Y batch, so saving a
+// rating or a note can never race with or overwrite status/quote data/
+// contact info, and vice versa.
+async function writeInternalReview(rowIndex, { rating, notes, problemClient }) {
+  const range = encodeURIComponent(`${CONFIG.TAB}!AN${rowIndex}:AP${rowIndex}`);
+  const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
+
+  const resp = await fetch(url, {
+    method:  'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ values: [[rating || '', notes || '', problemClient ? 'true' : 'false']] }),
   });
 
   if (resp.status === 401) { handleAuthExpired(); return false; }
@@ -899,6 +974,8 @@ function renderCard(inq) {
   const ago       = timeAgo(inq.timestamp);
   const hasQt     = dealValue(inq) > 0;
   const isStarred = !!starredIds[inq.refId];
+  const isRepeat  = !!repeatFlags[inq.refId];
+  const isFlagged = !!problemFlags[inq.refId];
   const followup  = followups[inq.refId];
   const today     = new Date().toISOString().split('T')[0];
   const soon      = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
@@ -918,7 +995,7 @@ function renderCard(inq) {
       <span class="card-ref">${escHtml(inq.refId)}</span>
       ${ago ? `<span class="card-ago">${ago}</span>` : ''}
     </div>
-    <div class="card-name">${escHtml(name)}</div>
+    <div class="card-name">${escHtml(name)}${isRepeat ? '<span class="repeat-tag" title="Returning client">↻ Repeat</span>' : ''}${isFlagged ? '<span class="flag-tag" title="Flagged client">⚠ Flagged</span>' : ''}</div>
     <div class="card-type">${escHtml(inq.eventType) || '—'}</div>
     <div class="card-meta">
       <span>${date}</span>
@@ -946,6 +1023,18 @@ function openDetail(refId) {
   const s = selected.status || 'new';
   badge.className = `d-status-badge ${s}`;
   badge.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+
+  document.getElementById('d-repeat-tag').innerHTML =
+    (repeatFlags[selected.refId] ? '<span class="repeat-tag" title="Returning client">↻ Repeat</span>' : '') +
+    (problemFlags[selected.refId] ? '<span class="flag-tag" title="Flagged client">⚠ Flagged</span>' : '');
+
+  // Sync internal review (rating, notes, problem flag) -- always editable,
+  // independent of the Contact/Event edit-mode toggle.
+  document.getElementById('star-rating').innerHTML = renderStarRating(selected.eventRating || 0);
+  document.getElementById('review-notes').value = selected.internalNotes || '';
+  document.getElementById('problem-checkbox').checked = !!selected.problemClient;
+  document.getElementById('review-save-status').textContent = '';
+  renderReviewWarning(selected);
 
   // Sync star button
   const isStarred = !!starredIds[selected.refId];
@@ -1165,8 +1254,90 @@ async function saveDetailEdits() {
   document.getElementById('detail-body').innerHTML = renderDetailBody(inq);
   document.getElementById('detail-edit-btn').style.display = '';
   refreshDetailAvailability(inq); // event date may have changed
+  repeatFlags = computeRepeatFlags(); // referral or contact info may have changed
+  problemFlags = computeProblemFlags(); // email/name changes affect clientKey matching too
+  document.getElementById('d-repeat-tag').innerHTML =
+    (repeatFlags[inq.refId] ? '<span class="repeat-tag" title="Returning client">↻ Repeat</span>' : '') +
+    (problemFlags[inq.refId] ? '<span class="flag-tag" title="Flagged client">⚠ Flagged</span>' : '');
+  renderReviewWarning(inq); // clientKey may have changed which past flags apply
   renderBoard(); // card name/date/type/guests may have changed
   showToast('Inquiry info updated');
+}
+
+// ── INTERNAL REVIEW (event rating, staff notes, problem-client flag) ────
+// Always editable regardless of the Contact/Event edit-mode toggle -- this
+// is meant to be jotted down quickly after an event, not treated as a
+// formal correction like the intake fields.
+
+function renderStarRating(rating) {
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    html += `<span class="rating-star${i <= rating ? ' filled' : ''}" onclick="setRating(${i})" title="${i} star${i>1?'s':''}">★</span>`;
+  }
+  return html;
+}
+
+// Shows every OTHER deal from this same client (by clientKey, so it also
+// catches a brand-new inquiry that hasn't been reviewed itself yet) that
+// was flagged as a problem, with whatever notes were left at the time --
+// the point is surfacing *why* immediately, not just that a flag exists.
+function renderReviewWarning(inq) {
+  const el = document.getElementById('review-warning');
+  if (!el) return;
+  const key = clientKey(inq);
+  const flaggedDeals = inquiries.filter(i => clientKey(i) === key && i.problemClient);
+  if (!flaggedDeals.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="warn-title">⚠ This client has been flagged</div>` +
+    flaggedDeals.map(d => `<div class="warn-item"><span class="warn-ref">${escHtml(d.refId)}</span>${d.internalNotes ? ' — ' + escHtml(d.internalNotes) : ''}</div>`).join('');
+}
+
+let reviewSaveTimer = null, reviewSaveSeq = 0;
+
+function reviewNotesInput(val) {
+  if (!selected) return;
+  selected.internalNotes = val;
+  clearTimeout(reviewSaveTimer);
+  reviewSaveTimer = setTimeout(flushReviewSave, 700);
+}
+
+function setRating(n) {
+  if (!selected) return;
+  selected.eventRating = (selected.eventRating === n) ? 0 : n; // click the same star again to clear
+  document.getElementById('star-rating').innerHTML = renderStarRating(selected.eventRating);
+  flushReviewSave(); // a single click, no need to debounce
+}
+
+function toggleProblemFlag() {
+  if (!selected) return;
+  selected.problemClient = document.getElementById('problem-checkbox').checked;
+  flushReviewSave();
+}
+
+function setReviewStatus(state) {
+  const el = document.getElementById('review-save-status');
+  if (!el) return;
+  el.className = 'review-save-status' + (state ? ' ' + state : '');
+  el.textContent = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'err' ? 'Not saved' : '';
+  if (state === 'saved') setTimeout(() => { if (el.textContent === 'Saved') { el.textContent = ''; el.className = 'review-save-status'; } }, 1500);
+}
+
+async function flushReviewSave() {
+  const inq = selected;
+  if (!inq) return;
+  const mySeq = ++reviewSaveSeq;
+  setReviewStatus('saving');
+  const ok = await writeInternalReview(inq.rowIndex, { rating: inq.eventRating, notes: inq.internalNotes, problemClient: inq.problemClient });
+  if (mySeq !== reviewSaveSeq) return; // a newer edit already superseded this save
+  setReviewStatus(ok ? 'saved' : 'err');
+  if (ok) {
+    problemFlags = computeProblemFlags();
+    renderReviewWarning(inq);
+    document.getElementById('d-repeat-tag').innerHTML =
+      (repeatFlags[inq.refId] ? '<span class="repeat-tag" title="Returning client">↻ Repeat</span>' : '') +
+      (problemFlags[inq.refId] ? '<span class="flag-tag" title="Flagged client">⚠ Flagged</span>' : '');
+    renderBoard(); // flag badge on cards may have changed
+  }
 }
 
 async function changeStatus() {
@@ -1701,15 +1872,69 @@ function dedupeForCloseRate(items) {
   })[0]);
 }
 
-function renderStats() {
-  // Test entries never feed into any of these numbers. Matches "test" as a
-  // whole word or word-start (test, Test, testing, tester) across the
-  // fields someone would actually type into while testing the system --
-  // deliberately NOT a plain substring match, so a real "Contest" or
-  // "Protest" entry doesn't get silently dropped from the numbers too.
-  const TEST_RE = /\btest/i;
-  const looksLikeTest = i => [i.firstName, i.lastName, i.email, i.company, i.eventType, i.notes]
+// Matches "test" as a whole word or word-start (test, Test, testing,
+// tester) across the fields someone would actually type into while testing
+// the system -- deliberately NOT a plain substring match, so a real
+// "Contest" or "Protest" entry doesn't get silently dropped from any of
+// the numbers/tags that rely on this.
+const TEST_RE = /\btest/i;
+function looksLikeTest(i) {
+  return [i.firstName, i.lastName, i.email, i.company, i.eventType, i.notes]
     .some(v => v && TEST_RE.test(String(v)));
+}
+
+function clientKey(inq) {
+  const email = (inq.email || '').trim().toLowerCase();
+  if (email) return 'e:' + email;
+  const name = [inq.firstName, inq.lastName].filter(Boolean).join(' ').trim().toLowerCase();
+  return name ? 'n:' + name : 'r:' + inq.refId;
+}
+
+// A client counts as "repeat" if they self-identified via the intake
+// form's dedicated "Have you booked with us before?" question
+// (returningClient -- distinct from referral === 'Past guest', which
+// answers a different question: how they heard about the venue, not
+// whether they've personally booked here before), or if they have 2+
+// distinct bookings on file. The distinct-booking count goes through the
+// same near-duplicate collapse as the close-rate stat (dedupeForCloseRate)
+// -- without that, an accidental double-submission of the same inquiry
+// would falsely look like a second booking. Every raw card belonging to a
+// flagged client still gets the tag, even the ones dedup would collapse
+// away for stats purposes -- the board itself stays un-deduped by design.
+function computeRepeatFlags() {
+  const real = inquiries.filter(i => !looksLikeTest(i));
+  const deduped = dedupeForCloseRate(real);
+  const counts = {};
+  deduped.forEach(i => { const k = clientKey(i); counts[k] = (counts[k] || 0) + 1; });
+  const repeatKeys = new Set(Object.keys(counts).filter(k => counts[k] > 1));
+  const flags = {};
+  real.forEach(i => {
+    if (repeatKeys.has(clientKey(i)) || i.returningClient) flags[i.refId] = true;
+  });
+  return flags;
+}
+let repeatFlags = {};
+
+// The whole point of flagging a problem client is catching them on a FUTURE
+// inquiry, before that new inquiry has ever been reviewed itself -- so this
+// aggregates by clientKey the same way computeRepeatFlags() does: if ANY of
+// a client's deals (past or present) was flagged, every one of their deals
+// shows the warning, including a brand-new inquiry that hasn't been touched
+// yet. Test entries are excluded so a flagged test row can't taint a real
+// client sharing similar-looking data.
+function computeProblemFlags() {
+  const real = inquiries.filter(i => !looksLikeTest(i));
+  const problemKeys = new Set();
+  real.forEach(i => { if (i.problemClient) problemKeys.add(clientKey(i)); });
+  const flags = {};
+  real.forEach(i => {
+    if (problemKeys.has(clientKey(i))) flags[i.refId] = true;
+  });
+  return flags;
+}
+let problemFlags = {};
+
+function renderStats() {
   const realInquiries = inquiries.filter(i => !looksLikeTest(i));
 
   const active      = realInquiries.filter(i => !['stale', 'dead', 'cancelled'].includes(i.status));

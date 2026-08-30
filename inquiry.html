@@ -205,6 +205,14 @@ textarea.inp{resize:vertical;min-height:80px;line-height:1.55}
           </div>
         </div>
 
+        <div class="field">
+          <label>Have you booked Carriage House before?</label>
+          <div class="pills" id="pills-returningClient">
+            <div class="pill" data-val="Yes">Yes, I've booked before</div>
+            <div class="pill" data-val="No">No, this is my first time</div>
+          </div>
+        </div>
+
         <div class="row2">
           <div class="field">
             <label>Interested in rooftop access?</label>
@@ -299,7 +307,7 @@ function initPillGroup(id, multi){
     });
   });
 }
-['guestCount','timeOfDay','budget','referral','rooftop','publicEvent','alcohol'].forEach(id => initPillGroup(id, false));
+['guestCount','timeOfDay','budget','referral','returningClient','rooftop','publicEvent','alcohol'].forEach(id => initPillGroup(id, false));
 initPillGroup('services', true);
 
 function toggleOther(id, show){
@@ -405,6 +413,10 @@ function buildPayload(){
     phone: document.getElementById('phone').value.trim(),
     company: document.getElementById('company').value.trim(),
     referral: singleSelect.referral || '',
+    // Distinct from "referral" (how they heard about us, which has its own
+    // "Past guest" option meaning "I attended someone else's event here").
+    // This is the actual "have you personally booked before" signal.
+    returningClient: singleSelect.returningClient === 'Yes' ? 'true' : (singleSelect.returningClient === 'No' ? 'false' : ''),
     eventType,
     eventDate: dateFlex.checked ? '' : (dateInput.value || ''),
     doorsOpen: tod[0],
