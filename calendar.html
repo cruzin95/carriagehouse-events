@@ -86,10 +86,12 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .cal-cell.today .cal-daynum{color:var(--amber);font-weight:700}
 .cal-flag-wrap{position:relative;display:inline-flex}
 .cal-flag{width:6px;height:6px;border-radius:50%;background:var(--red);cursor:pointer}
+.cal-flag.noise{background:var(--muted-2)}
 .cal-popover{display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--line-2);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);padding:6px;min-width:190px;max-width:230px;z-index:50}
 .cal-popover.show{display:block}
 .cal-cell.pop-open{z-index:60}
 .cal-pop-label{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--red);padding:4px 8px 6px}
+.cal-pop-label.muted{color:var(--muted-2)}
 .cal-pop-item{display:block;padding:6px 8px;border-radius:4px;text-decoration:none;transition:.12s}
 a.cal-pop-item:hover{background:var(--surface-3)}
 .cal-pop-time{display:block;font-family:var(--mono);font-size:.6rem;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em}
@@ -168,6 +170,7 @@ a.cal-pop-item:hover{background:var(--surface-3)}
         <span><span class="dot" style="background:var(--invoiced-text)"></span>Invoiced</span>
         <span><span class="dot" style="background:var(--stale-text)"></span>Stale</span>
         <span><span class="dot" style="background:var(--red)"></span>Not on the board</span>
+        <span><span class="dot" style="background:var(--muted-2)"></span>Other calendar item</span>
       </div>
     </div>
 
@@ -370,6 +373,36 @@ function isoMidnightNY(dateStr) {
 function pad2(n){ return String(n).padStart(2,'0'); }
 function monthKey(y,m){ return `${y}-${m}`; }
 
+// Distinguishes an "event-shaped" calendar entry (something that could
+// plausibly be a venue booking) from ordinary calendar noise -- personal
+// reminders, standing meetings, out-of-office banners, declined invites,
+// etc. None of these signals alone is definitive, but together they cut
+// out the vast majority of noise without needing anything venue-specific
+// tagged on the event itself.
+function looksLikeBooking(ev) {
+  // Google's own synthetic entry types (out-of-office, focus time, working
+  // location, birthdays) are never a venue rental.
+  if (ev.eventType && ev.eventType !== 'default') return false;
+  // "Free"/transparent events don't occupy the venue -- most personal
+  // placeholders and reminders are marked this way.
+  if (ev.transparency === 'transparent') return false;
+  // Recurring items (a weekly standing meeting, etc.) are essentially never
+  // a one-off venue rental.
+  if (ev.recurringEventId) return false;
+  // If the calendar owner declined their own invite, it's not really
+  // "happening" here.
+  const self = (ev.attendees || []).find(a => a.self);
+  if (self && self.responseStatus === 'declined') return false;
+  // Under an hour doesn't look like an evening rental. Loose threshold --
+  // this only needs to catch quick calls/reminders marked busy, not draw a
+  // precise line.
+  if (ev.start?.dateTime && ev.end?.dateTime) {
+    const mins = (new Date(ev.end.dateTime) - new Date(ev.start.dateTime)) / 60000;
+    if (mins > 0 && mins < 60) return false;
+  }
+  return true;
+}
+
 async function loadCalendarMonth(y, m) {
   const key = monthKey(y, m);
   if (calMonthsFetched[key] || !accessToken) return;
@@ -393,6 +426,7 @@ async function loadCalendarMonth(y, m) {
       }
       (calEventsByDate[dateStr] = calEventsByDate[dateStr] || []).push({
         id: ev.id, title: ev.summary || '(untitled event)', link: ev.htmlLink || '', time,
+        bookingLike: looksLikeBooking(ev),
       });
     });
     calMonthsFetched[key] = true;
@@ -452,7 +486,14 @@ function renderCalendar() {
     // untracked calendar entry, which the old count-only check missed.
     const trackedIds = new Set(deals.map(d => d.calendarEventId).filter(Boolean));
     const unmatched = calEvents.filter(ev => !trackedIds.has(ev.id));
-    const offPipeline = unmatched.length > 0;
+    // Only event-shaped entries (see looksLikeBooking()) make the cell red --
+    // everything else unmatched is still visible in the popover, just under
+    // a calmer, non-alarming indicator so ordinary calendar noise (personal
+    // reminders, standing meetings, etc.) doesn't drown out real signal.
+    const unmatchedBooking = unmatched.filter(ev => ev.bookingLike);
+    const unmatchedOther = unmatched.filter(ev => !ev.bookingLike);
+    const offPipeline = unmatchedBooking.length > 0;
+    const hasNoiseOnly = !offPipeline && unmatchedOther.length > 0;
     const isToday = c.dateStr === todayStr;
     const shown = deals.slice(0, 2);
     const overflow = deals.length - shown.length;
@@ -470,23 +511,29 @@ function renderCalendar() {
       </div>`;
     }).join('');
     const moreHtml = overflow > 0 ? `<div class="cal-more">+${overflow} more</div>` : '';
-    const flagHtml = offPipeline
-      ? `<div class="cal-flag-wrap">
-          <div class="cal-flag" title="${unmatched.length} calendar item${unmatched.length>1?'s':''} not on the board — click to view" onclick="toggleCalPopover('${c.dateStr}', event)"></div>
+    let flagHtml = '';
+    if (offPipeline || hasNoiseOnly) {
+      const flagClass = offPipeline ? 'cal-flag' : 'cal-flag noise';
+      const flagTitle = offPipeline
+        ? `${unmatchedBooking.length} calendar item${unmatchedBooking.length>1?'s':''} not on the board — click to view`
+        : `${unmatchedOther.length} other calendar item${unmatchedOther.length>1?'s':''} — click to view`;
+      const itemHtml = ev => ev.link
+        ? `<a href="${escHtml(ev.link)}" target="_blank" rel="noopener" class="cal-pop-item">
+            <span class="cal-pop-time">${escHtml(ev.time||'All day')}</span>
+            <span class="cal-pop-title">${escHtml(ev.title)}</span>
+          </a>`
+        : `<div class="cal-pop-item">
+            <span class="cal-pop-time">${escHtml(ev.time||'All day')}</span>
+            <span class="cal-pop-title">${escHtml(ev.title)}</span>
+          </div>`;
+      flagHtml = `<div class="cal-flag-wrap">
+          <div class="${flagClass}" title="${flagTitle}" onclick="toggleCalPopover('${c.dateStr}', event)"></div>
           <div class="cal-popover" id="pop-${c.dateStr}">
-            <div class="cal-pop-label">Not on the board</div>
-            ${unmatched.map(ev => ev.link
-              ? `<a href="${escHtml(ev.link)}" target="_blank" rel="noopener" class="cal-pop-item">
-                  <span class="cal-pop-time">${escHtml(ev.time||'All day')}</span>
-                  <span class="cal-pop-title">${escHtml(ev.title)}</span>
-                </a>`
-              : `<div class="cal-pop-item">
-                  <span class="cal-pop-time">${escHtml(ev.time||'All day')}</span>
-                  <span class="cal-pop-title">${escHtml(ev.title)}</span>
-                </div>`).join('')}
+            ${unmatchedBooking.length ? `<div class="cal-pop-label">Not on the board</div>${unmatchedBooking.map(itemHtml).join('')}` : ''}
+            ${unmatchedOther.length ? `<div class="cal-pop-label muted">Other calendar items</div>${unmatchedOther.map(itemHtml).join('')}` : ''}
           </div>
-        </div>`
-      : '';
+        </div>`;
+    }
 
     return `<div class="cal-cell${offPipeline?' off-pipeline':''}${isToday?' today':''}">
       <div class="cal-daynum"><span>${c.day}</span>${flagHtml}</div>

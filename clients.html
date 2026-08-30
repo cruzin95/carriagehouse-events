@@ -309,6 +309,61 @@ function parseRow(row, rowIndex) {
   };
 }
 
+// ── TEST-ENTRY FILTER & NEAR-DUPLICATE COLLAPSE ─────────────────────────
+// Identical logic to renderStats()/dedupeForCloseRate() in index.html, just
+// applied to the whole dataset rather than scoped to close-rate candidates
+// -- a client directory should reflect real, distinct bookings, so this
+// filters test submissions and collapses accidental re-submissions of the
+// same inquiry before anything gets grouped by client.
+const TEST_RE = /\btest/i;
+function looksLikeTest(i) {
+  return [i.firstName, i.lastName, i.email, i.company, i.eventType, i.notes]
+    .some(v => v && TEST_RE.test(String(v)));
+}
+function dedupeInquiries(items) {
+  const normStr   = v => (v || '').toString().trim().toLowerCase();
+  const normPhone = v => (v || '').toString().replace(/\D/g, '');
+  const weekStart = v => {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    const dow = (d.getDay() + 6) % 7;
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
+    return start.toISOString().slice(0, 10);
+  };
+  const norm = items.map(i => ({
+    email: normStr(i.email), first: normStr(i.firstName), last: normStr(i.lastName),
+    phone: normPhone(i.phone), eventDate: i.eventDate || '',
+    week: i.timestamp ? weekStart(i.timestamp) : '',
+  }));
+  function isDup(a, b) {
+    if (a.email && b.email && a.email === b.email) return true;
+    let matched = 0;
+    if (a.first && b.first && a.first === b.first) matched++;
+    if (a.last && b.last && a.last === b.last) matched++;
+    if (a.phone && b.phone && a.phone === b.phone) matched++;
+    if (a.eventDate && b.eventDate && a.eventDate === b.eventDate) matched++;
+    if (a.week && b.week && a.week === b.week) matched++;
+    return matched >= 3;
+  }
+  const n = items.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (isDup(norm[i], norm[j])) union(i, j);
+
+  const STATUS_RANK = { invoiced: 6, contracted: 5, quoted: 4, stale: 3, dead: 2, cancelled: 2, new: 1 };
+  const groups = {};
+  for (let i = 0; i < n; i++) (groups[find(i)] = groups[find(i)] || []).push(items[i]);
+
+  return Object.values(groups).map(group => group.slice().sort((a, b) => {
+    const rankDiff = (STATUS_RANK[b.status] || 0) - (STATUS_RANK[a.status] || 0);
+    if (rankDiff) return rankDiff;
+    const quoteDiff = (parseFloat(b.quoteTotal) || 0) - (parseFloat(a.quoteTotal) || 0);
+    if (quoteDiff) return quoteDiff;
+    return (b.timestamp || '').localeCompare(a.timestamp || '');
+  })[0]);
+}
+
 async function loadInquiries() {
   setLoading(true);
   clearError();
@@ -326,7 +381,8 @@ async function loadInquiries() {
       if (!firstRefId.startsWith('EVT-')) rows = rows.slice(1);
     }
     const offset = values.length - rows.length + 1;
-    inquiries = rows.map((row,i) => parseRow(row, i+offset)).filter(inq => inq.refId && inq.refId.startsWith('EVT-'));
+    const parsed = rows.map((row,i) => parseRow(row, i+offset)).filter(inq => inq.refId && inq.refId.startsWith('EVT-'));
+    inquiries = dedupeInquiries(parsed.filter(inq => !looksLikeTest(inq)));
 
     groupClients();
     renderClients();
