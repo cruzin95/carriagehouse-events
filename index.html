@@ -52,6 +52,11 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .logo{font-family:var(--display);font-size:1.4rem;color:var(--ink);letter-spacing:.05em}
 .logo em{color:var(--amber);font-style:normal}
 .header-right{display:flex;align-items:center;gap:14px}
+.hub-nav{display:flex;gap:4px;padding:10px 32px;background:var(--surface-2);border-bottom:1px solid var(--line);position:sticky;top:60px;z-index:99}
+.hub-nav-link{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-decoration:none;padding:7px 14px;border-radius:5px;transition:.15s}
+.hub-nav-link:hover{color:var(--ink);background:var(--surface-3)}
+.hub-nav-link.active{color:var(--amber);background:var(--amber-soft)}
+@media(max-width:600px){.hub-nav{padding:8px 16px}}
 .header-tag{font-family:var(--mono);font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-2)}
 .header-btn{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:7px 13px;border-radius:5px;border:1px solid var(--line-2);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
 .header-btn:hover{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--ink)}
@@ -276,6 +281,13 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
       <button class="header-btn" onclick="signOut()">Sign out</button>
     </div>
   </header>
+
+  <nav class="hub-nav">
+    <a href="index.html" class="hub-nav-link active">Board</a>
+    <a href="calendar.html" class="hub-nav-link">Calendar</a>
+    <a href="clients.html" class="hub-nav-link">Clients</a>
+    <a href="payments.html" class="hub-nav-link">Payments</a>
+  </nav>
 
   <div class="page">
     <div class="page-header" style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:28px">
@@ -600,6 +612,15 @@ async function loadInquiries() {
     // Write back any pending data (from returning from quote/contract)
     await flushPendingWrites();
     renderBoard();
+
+    // Deep link from another hub page (calendar.html, clients.html): open
+    // the requested deal's detail panel once inquiries are loaded, then
+    // strip the query param so a refresh doesn't reopen it.
+    const openRef = new URLSearchParams(location.search).get('open');
+    if (openRef) {
+      history.replaceState(null, '', location.pathname);
+      openDetail(openRef);
+    }
 
   } catch(e) {
     showError('Could not load inquiries: ' + e.message);

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>170 Eldridge — Clients</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0e0d0a; --card:#161410; --surface-2:#1d1a14; --surface-3:#232019;
+  --line:#2b271f; --line-2:#3a352a; --border:var(--line);
+  --ink:#f2ede1; --ink2:#d9d2c2; --muted:#9a9080; --muted-2:#6b6353;
+  --amber:#eaa23a; --amber-dim:#a87524; --amber-soft:rgba(234,162,58,.12);
+  --green:#88b46c; --green-soft:rgba(136,180,108,.14);
+  --red:#d3765b; --red-soft:rgba(211,118,91,.14);
+  --blue:#7aa0cf; --blue-soft:rgba(122,160,207,.14);
+  --violet:#b49bdb; --violet-soft:rgba(180,155,219,.14);
+  --display:'Bebas Neue',sans-serif; --mono:'Space Mono',monospace; --body:'Inter',system-ui,sans-serif;
+  --new-bg:var(--blue-soft); --new-border:rgba(122,160,207,.35); --new-text:var(--blue);
+  --quoted-bg:var(--amber-soft); --quoted-border:var(--amber-dim); --quoted-text:var(--amber);
+  --contracted-bg:var(--green-soft); --contracted-border:rgba(136,180,108,.35); --contracted-text:var(--green);
+  --invoiced-bg:var(--violet-soft); --invoiced-border:rgba(180,155,219,.35); --invoiced-text:var(--violet);
+  --stale:#b08d57; --stale-soft:rgba(176,141,87,.14);
+  --stale-bg:var(--stale-soft); --stale-border:rgba(176,141,87,.35); --stale-text:var(--stale);
+  --dead-bg:var(--surface-3); --dead-border:var(--line-2); --dead-text:var(--muted-2);
+}
+html{font-size:15px}
+body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
+::selection{background:var(--amber);color:#0e0d0a}
+
+/* ── AUTH (identical to index.html) ── */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg)}
+.auth-card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:48px 40px;max-width:400px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.45)}
+.auth-logo{font-family:var(--display);font-size:1.9rem;letter-spacing:.05em;color:var(--ink);margin-bottom:6px}
+.auth-eyebrow{font-family:var(--mono);font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted-2);margin-bottom:32px}
+.auth-desc{font-size:.875rem;color:var(--muted);line-height:1.65;margin-bottom:32px}
+.btn-gsi{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 24px;border-radius:6px;border:1.5px solid var(--line-2);background:#fff;color:#1a1a1a;font-family:var(--body);font-size:.875rem;font-weight:500;cursor:pointer;width:100%;transition:all .15s}
+.btn-gsi:hover{opacity:.92;border-color:var(--amber-dim)}
+.btn-gsi svg{flex-shrink:0}
+.auth-error{margin-top:16px;font-size:.8rem;color:var(--red);background:var(--red-soft);border:1px solid rgba(211,118,91,.35);border-radius:5px;padding:8px 12px;display:none}
+.gate-input{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:6px;padding:12px 14px;font-size:.9rem;color:var(--ink);font-family:inherit;text-align:center;letter-spacing:.1em;transition:.14s}
+.gate-input:focus{outline:none;border-color:var(--amber-dim)}
+.gate-btn{width:100%;margin-top:14px;background:var(--amber);border:none;border-radius:6px;padding:12px;font-family:var(--body);font-size:.875rem;font-weight:600;color:#140f08;cursor:pointer;transition:.15s}
+.gate-btn:hover{background:#f4b04c}
+
+/* ── SHELL ── */
+.site-header{background:rgba(14,13,10,.94);backdrop-filter:blur(10px);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--line)}
+.logo{font-family:var(--display);font-size:1.4rem;color:var(--ink);letter-spacing:.05em}
+.header-right{display:flex;align-items:center;gap:14px}
+.header-tag{font-family:var(--mono);font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-2)}
+.user-chip{font-family:var(--mono);font-size:.65rem;color:var(--muted-2);letter-spacing:.04em}
+.header-btn{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:7px 13px;border-radius:5px;border:1px solid var(--line-2);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.header-btn:hover{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--ink)}
+.hub-nav{display:flex;gap:4px;padding:10px 32px;background:var(--surface-2);border-bottom:1px solid var(--line);position:sticky;top:60px;z-index:99}
+.hub-nav-link{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-decoration:none;padding:7px 14px;border-radius:5px;transition:.15s}
+.hub-nav-link:hover{color:var(--ink);background:var(--surface-3)}
+.hub-nav-link.active{color:var(--amber);background:var(--amber-soft)}
+.page{max-width:1000px;margin:0 auto;padding:32px 24px 80px}
+
+.loading-wrap{display:flex;align-items:center;gap:10px;color:var(--muted);font-family:var(--mono);font-size:.8rem;padding:40px 0;justify-content:center}
+.spin{width:14px;height:14px;border:2px solid var(--line-2);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-banner{background:var(--red-soft);border:1px solid rgba(211,118,91,.35);color:var(--red);padding:12px 16px;border-radius:6px;font-size:.85rem;margin-bottom:20px}
+
+/* ── SEARCH ── */
+.search-wrap{margin-bottom:24px}
+.search-inp{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:7px;padding:13px 16px;font-size:.95rem;color:var(--ink);font-family:var(--body);outline:none;transition:border-color .15s}
+.search-inp:focus{border-color:var(--amber-dim)}
+.search-count{font-family:var(--mono);font-size:.7rem;color:var(--muted-2);margin-top:8px}
+
+/* ── CLIENT CARDS ── */
+.client-card{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-bottom:14px;overflow:hidden}
+.client-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;transition:background .12s}
+.client-head:hover{background:var(--surface-2)}
+.client-name{font-family:var(--display);font-size:1.25rem;letter-spacing:.02em;color:var(--ink)}
+.client-meta{font-family:var(--mono);font-size:.7rem;color:var(--muted-2);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap}
+.client-stats{text-align:right;flex-shrink:0}
+.client-value{font-family:var(--display);font-size:1.2rem;color:var(--amber)}
+.client-count{font-family:var(--mono);font-size:.65rem;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em}
+.client-chevron{font-size:12px;color:var(--muted-2);transition:transform .15s;margin-left:4px}
+.client-card.open .client-chevron{transform:rotate(90deg)}
+.client-deals{display:none;border-top:1px solid var(--line)}
+.client-card.open .client-deals{display:block}
+.deal-row{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line)}
+.deal-row:last-child{border-bottom:none}
+.deal-main{flex:1;min-width:0}
+.deal-title{font-size:.85rem;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.deal-sub{font-family:var(--mono);font-size:.68rem;color:var(--muted-2);margin-top:2px}
+.deal-badge{font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:99px;flex-shrink:0}
+.deal-badge.new{background:var(--new-bg);color:var(--new-text)}
+.deal-badge.quoted{background:var(--quoted-bg);color:var(--quoted-text)}
+.deal-badge.contracted{background:var(--contracted-bg);color:var(--contracted-text)}
+.deal-badge.invoiced{background:var(--invoiced-bg);color:var(--invoiced-text)}
+.deal-badge.stale{background:var(--stale-bg);color:var(--stale-text)}
+.deal-badge.dead{background:var(--dead-bg);color:var(--dead-text)}
+.deal-value{font-family:var(--mono);font-size:.78rem;color:var(--ink2);flex-shrink:0;min-width:70px;text-align:right}
+.deal-actions{display:flex;gap:6px;flex-shrink:0}
+.deal-btn{font-family:var(--mono);font-size:.62rem;letter-spacing:.05em;text-transform:uppercase;padding:6px 10px;border-radius:5px;border:1px solid var(--line-2);background:var(--surface-3);color:var(--ink2);cursor:pointer;transition:.14s;white-space:nowrap}
+.deal-btn:hover{border-color:var(--amber-dim);color:var(--amber);background:var(--amber-soft)}
+.deal-btn.primary{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--amber)}
+
+.empty{text-align:center;padding:60px 20px;color:var(--muted-2);font-family:var(--mono);font-size:.8rem}
+
+@media(max-width:600px){.site-header{padding:0 16px}.hub-nav{padding:8px 16px}.header-tag,.user-chip{display:none}.page{padding:20px 16px 60px}.client-stats{display:none}.deal-value{display:none}}
+</style>
+</head>
+<body>
+
+<div id="gate-screen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">CARRIAGE HOUSE</div>
+    <div class="auth-eyebrow">Event Hub</div>
+    <div class="auth-desc">Enter the access code to continue.</div>
+    <input type="password" class="gate-input" id="gate-input" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter') checkGate()">
+    <button class="gate-btn" id="gate-btn" onclick="checkGate()">Continue</button>
+    <div class="auth-error" id="gate-error">Incorrect code. Try again.</div>
+  </div>
+</div>
+
+<div id="auth-screen" class="auth-wrap" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">CARRIAGE HOUSE</div>
+    <div class="auth-eyebrow">Event Hub</div>
+    <div class="auth-desc">Sign in with your Google account to search past clients.</div>
+    <button class="btn-gsi" id="signin-btn" onclick="signIn()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+      Sign in with Google
+    </button>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header class="site-header">
+    <div class="logo">CARRIAGE HOUSE</div>
+    <div class="header-right">
+      <span class="header-tag">Event Hub</span>
+      <span class="user-chip" id="user-chip"></span>
+      <button class="header-btn" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="hub-nav">
+    <a href="index.html" class="hub-nav-link">Board</a>
+    <a href="calendar.html" class="hub-nav-link">Calendar</a>
+    <a href="clients.html" class="hub-nav-link active">Clients</a>
+    <a href="payments.html" class="hub-nav-link">Payments</a>
+  </nav>
+
+  <div class="page">
+    <div class="search-wrap">
+      <input class="search-inp" id="search-inp" placeholder="Search by name, email, phone, or company…" oninput="renderClients()">
+      <div class="search-count" id="search-count"></div>
+    </div>
+
+    <div id="loading-row" class="loading-wrap" style="display:none"><div class="spin"></div> Loading…</div>
+    <div id="error-row" class="error-banner" style="display:none"></div>
+    <div id="client-list"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// CONFIG -- must match index.html exactly (same Sheet, same columns).
+const CONFIG = {
+  CLIENT_ID: '515515941640-qvbv3p5mm8j5rt0mkqilgu8sfo2cplmu.apps.googleusercontent.com',
+  SHEET_ID:  '10z_FdC74leDuRG8-CR7U4IFzWOM4-1wNueM9D3Dmn3Q',
+  TAB:       'Inquiries',
+};
+const COL = {
+  timestamp:0, refId:1, firstName:2, lastName:3, email:4, phone:5,
+  company:6, referral:7, eventType:8, eventDate:9, doorsOpen:10,
+  doorsClose:11, guestCount:12, doorStaff:13, rooftop:14,
+  servicesNeeded:15, outsideVendors:16, guestMethod:17, publicEvent:18,
+  alcohol:19, ageReq:20, insurance:21, budget:22, payMethod:23, notes:24,
+  status:25, quoteTotal:26, quoteData:27, contractGenerated:28, lastUpdatedBy:29, calendarEventId:30,
+  invoiceData:31, invoiceTotal:32, starred:33, followupDate:34,
+  lastActivityAt:35, lastAutoDraftAt:36, eventTitle:37,
+};
+
+let tokenClient, accessToken = null, currentUserEmail = '';
+let inquiries = [];
+let clients = []; // grouped
+
+// ── ACCESS GATE (identical to index.html) ──────────────────────────────
+const GATE_CODE = '1395';
+const GATE_KEY  = '170e_gate_ok';
+function checkGate(){
+  const input = document.getElementById('gate-input');
+  const err   = document.getElementById('gate-error');
+  if (input.value === GATE_CODE) {
+    localStorage.setItem(GATE_KEY, '1');
+    err.style.display = 'none';
+    document.getElementById('gate-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  } else {
+    err.style.display = 'block';
+    input.value = '';
+    input.focus();
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  if (localStorage.getItem(GATE_KEY) === '1') {
+    document.getElementById('gate-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
+  const saved = sessionStorage.getItem('170e_token');
+  if (saved) {
+    accessToken = saved;
+    currentUserEmail = sessionStorage.getItem('170e_user') || '';
+    if (currentUserEmail) document.getElementById('user-chip').textContent = currentUserEmail;
+    showApp();
+    loadInquiries();
+  }
+  const t = setInterval(() => {
+    if (window.google?.accounts?.oauth2) {
+      clearInterval(t);
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CONFIG.CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.compose',
+        callback: onToken,
+      });
+    }
+  }, 100);
+});
+
+function signIn() {
+  if (!tokenClient) { showAuthError('Google Sign-In is still loading — please try again in a moment.'); return; }
+  tokenClient.requestAccessToken({ prompt: '' });
+}
+function onToken(resp) {
+  if (resp.error) { showAuthError('Sign-in failed: ' + resp.error); return; }
+  accessToken = resp.access_token;
+  sessionStorage.setItem('170e_token', accessToken);
+  fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers:{ Authorization:`Bearer ${accessToken}` } })
+    .then(r=>r.json()).then(info=>{
+      currentUserEmail = info.email || '';
+      sessionStorage.setItem('170e_user', currentUserEmail);
+      document.getElementById('user-chip').textContent = currentUserEmail;
+    }).catch(()=>{});
+  showApp();
+  loadInquiries();
+}
+function signOut() {
+  if (accessToken && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(accessToken);
+  sessionStorage.clear();
+  accessToken = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+function showApp() {
+  document.getElementById('gate-screen').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+function handleAuthExpired() {
+  accessToken = null;
+  sessionStorage.removeItem('170e_token');
+  setLoading(false);
+  showError('Your session expired. Please sign in again.');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+function setLoading(show) { document.getElementById('loading-row').style.display = show ? 'flex' : 'none'; }
+function showError(msg) { const el=document.getElementById('error-row'); el.textContent=msg; el.style.display='block'; }
+function clearError() { document.getElementById('error-row').style.display = 'none'; }
+
+// ── LOAD (read-only -- no writes happen from this page) ────────────────
+function safeJson(str) { if (!str) return null; try { return JSON.parse(str); } catch { return null; } }
+function escHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dealValue(inq) {
+  if (inq.status === 'invoiced') { const v = parseFloat(inq.invoiceTotal) || 0; if (v > 0) return v; }
+  return parseFloat(inq.quoteTotal) || 0;
+}
+function fmtDateShort(s) {
+  if (!s) return '—';
+  return new Date(s + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+}
+
+// Full row parse (same shape as index.html's parseRow) -- clients.html needs
+// the complete inquiry object, since jumping to the portal's Contract stage
+// hands this whole object off as prefill data.
+function parseRow(row, rowIndex) {
+  return {
+    rowIndex,
+    timestamp: row[COL.timestamp] || '', refId: row[COL.refId] || '',
+    firstName: row[COL.firstName] || '', lastName: row[COL.lastName] || '',
+    email: row[COL.email] || '', phone: row[COL.phone] || '', company: row[COL.company] || '',
+    referral: row[COL.referral] || '', eventType: row[COL.eventType] || '', eventDate: row[COL.eventDate] || '',
+    doorsOpen: row[COL.doorsOpen] || '', doorsClose: row[COL.doorsClose] || '', guestCount: row[COL.guestCount] || '',
+    doorStaff: row[COL.doorStaff] || '', rooftop: row[COL.rooftop] || '', servicesNeeded: row[COL.servicesNeeded] || '',
+    outsideVendors: row[COL.outsideVendors] || '', guestMethod: row[COL.guestMethod] || '', publicEvent: row[COL.publicEvent] || '',
+    alcohol: row[COL.alcohol] || '', ageReq: row[COL.ageReq] || '', insurance: row[COL.insurance] || '',
+    budget: row[COL.budget] || '', payMethod: row[COL.payMethod] || '', notes: row[COL.notes] || '',
+    status: row[COL.status] || 'new', quoteTotal: row[COL.quoteTotal] || '', quoteData: safeJson(row[COL.quoteData]),
+    contractGenerated: row[COL.contractGenerated] || '', lastUpdatedBy: row[COL.lastUpdatedBy] || '',
+    calendarEventId: row[COL.calendarEventId] || '', invoiceData: safeJson(row[COL.invoiceData]),
+    invoiceTotal: row[COL.invoiceTotal] || '',
+    starred: row[COL.starred] === 'true' ? true : row[COL.starred] === 'false' ? false : undefined,
+    followupDate: row[COL.followupDate] || '', lastActivityAt: row[COL.lastActivityAt] || '',
+    lastAutoDraftAt: row[COL.lastAutoDraftAt] || '', eventTitle: row[COL.eventTitle] || '',
+  };
+}
+
+async function loadInquiries() {
+  setLoading(true);
+  clearError();
+  try {
+    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AL`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}`;
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (resp.status === 401) { handleAuthExpired(); return; }
+    if (!resp.ok) throw new Error(`Sheets API error: ${resp.status}`);
+
+    const { values = [] } = await resp.json();
+    let rows = values;
+    if (rows.length > 0) {
+      const firstRefId = (rows[0][COL.refId] || '').toString();
+      if (!firstRefId.startsWith('EVT-')) rows = rows.slice(1);
+    }
+    const offset = values.length - rows.length + 1;
+    inquiries = rows.map((row,i) => parseRow(row, i+offset)).filter(inq => inq.refId && inq.refId.startsWith('EVT-'));
+
+    groupClients();
+    renderClients();
+  } catch(e) {
+    showError('Could not load inquiries: ' + e.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── GROUP BY CLIENT ──────────────────────────────────────────────────
+// Simpler and more predictable than the fuzzy multi-signal matching used
+// for close-rate stats: group strictly by normalized email when present,
+// else by normalized full name. A searchable directory needs deals to land
+// in a client's bucket deterministically, not by a scored guess.
+function clientKey(inq) {
+  const email = (inq.email || '').trim().toLowerCase();
+  if (email) return 'e:' + email;
+  const name = [inq.firstName, inq.lastName].filter(Boolean).join(' ').trim().toLowerCase();
+  return name ? 'n:' + name : 'r:' + inq.refId; // no name or email at all -- keep it its own bucket
+}
+
+function groupClients() {
+  const map = new Map();
+  inquiries.forEach(inq => {
+    const key = clientKey(inq);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(inq);
+  });
+  clients = Array.from(map.values()).map(deals => {
+    deals.sort((a,b) => (b.eventDate||'').localeCompare(a.eventDate||''));
+    const primary = deals[0];
+    return {
+      name: [primary.firstName, primary.lastName].filter(Boolean).join(' ') || '(no name)',
+      email: primary.email, phone: primary.phone, company: primary.company,
+      deals,
+      lifetimeValue: deals.reduce((s,d) => s + dealValue(d), 0),
+      mostRecentDate: deals.map(d=>d.eventDate).filter(Boolean).sort().slice(-1)[0] || '',
+      searchBlob: [primary.firstName, primary.lastName, primary.email, primary.phone, primary.company]
+        .join(' ').toLowerCase(),
+    };
+  });
+  // Most recently active client first.
+  clients.sort((a,b) => (b.mostRecentDate||'').localeCompare(a.mostRecentDate||''));
+}
+
+function renderClients() {
+  const q = (document.getElementById('search-inp').value || '').trim().toLowerCase();
+  const filtered = q ? clients.filter(c => c.searchBlob.includes(q)) : clients;
+
+  document.getElementById('search-count').textContent =
+    `${filtered.length} client${filtered.length===1?'':'s'}${q ? ' matching' : ' on file'}`;
+
+  if (!filtered.length) {
+    document.getElementById('client-list').innerHTML = `<div class="empty">No clients found.</div>`;
+    return;
+  }
+
+  document.getElementById('client-list').innerHTML = filtered.map((c, i) => {
+    const metaBits = [c.email, c.phone, c.company].filter(Boolean).map(escHtml);
+    const dealsHtml = c.deals.map(d => {
+      const title = d.eventTitle || d.eventType || 'Untitled event';
+      return `<div class="deal-row">
+        <span class="deal-badge ${escHtml(d.status||'new')}">${escHtml(d.status||'new')}</span>
+        <div class="deal-main">
+          <div class="deal-title">${escHtml(title)}</div>
+          <div class="deal-sub">${fmtDateShort(d.eventDate)} · ${escHtml(d.refId)}</div>
+        </div>
+        <div class="deal-value">${dealValue(d) > 0 ? '$'+dealValue(d).toLocaleString() : ''}</div>
+        <div class="deal-actions">
+          <button class="deal-btn" onclick="event.stopPropagation();openBoard('${d.refId}')">Board</button>
+          <button class="deal-btn primary" onclick="event.stopPropagation();openContract('${d.refId}')">Contract →</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="client-card" id="client-${i}">
+      <div class="client-head" onclick="toggleClient(${i})">
+        <div>
+          <div class="client-name">${escHtml(c.name)}</div>
+          <div class="client-meta">${metaBits.join(' · ') || 'No contact info on file'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="client-stats">
+            <div class="client-value">${c.lifetimeValue > 0 ? '$'+c.lifetimeValue.toLocaleString() : '—'}</div>
+            <div class="client-count">${c.deals.length} deal${c.deals.length===1?'':'s'}</div>
+          </div>
+          <span class="client-chevron">▶</span>
+        </div>
+      </div>
+      <div class="client-deals">${dealsHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleClient(i) {
+  document.getElementById('client-'+i).classList.toggle('open');
+}
+function openBoard(refId) {
+  window.location.href = `index.html?open=${encodeURIComponent(refId)}`;
+}
+
+// ── JUMP TO PORTAL: CONTRACT STAGE ──────────────────────────────────────
+// Same hand-off shape as index.html's goToPortal(), just keyed off an
+// explicit inquiry rather than a currently-open detail panel.
+function openContract(refId) {
+  const inq = inquiries.find(i => i.refId === refId);
+  if (!inq) return;
+  sessionStorage.setItem('170e_prefill', JSON.stringify({
+    source: 'hub',
+    stage: 'contract',
+    refId: inq.refId,
+    rowIndex: inq.rowIndex,
+    inquiry: inq,
+    quote: inq.quoteData || null,
+    invoice: inq.invoiceData || null,
+    token: accessToken,
+    calendarEventId: inq.calendarEventId || '',
+    portalState: null,
+  }));
+  if (accessToken) sessionStorage.setItem('170e_token', accessToken);
+  if (currentUserEmail) sessionStorage.setItem('170e_user', currentUserEmail);
+  window.location.href = 'portal.html';
+}
+</script>
+</body>
+</html>
