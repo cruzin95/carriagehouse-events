@@ -579,7 +579,7 @@ window.addEventListener('load', () => {
       clearInterval(t);
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.compose',
+        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/userinfo.email',
         callback: onToken,
       });
     }
@@ -810,16 +810,19 @@ async function writeAttribution(rowIndex, field, email) {
 // ── ONE-TIME BACKFILL (run once from the browser console) ──────────────
 // Deals that reached quoted/contracted/invoiced *before* the AQ:AS
 // attribution columns existed have no quotedBy/contractedBy/invoicedBy on
-// file. This gives them a starting value using the best data available --
-// lastUpdatedBy (whoever's Google account most recently saved the row) --
-// rather than leaving history blank. Not wired to any button since it's a
-// one-off; sign in, open the console, and call runAttributionBackfill().
-// Safe to run more than once -- it only ever touches rows that are still
-// missing a given field, so it never overwrites real attribution data
-// (including data written by the earlier run itself).
+// file. This gives them a starting value using the best data available:
+// lastUpdatedBy where it's on file, and otherwise the currently signed-in
+// user (a best-effort guess for deals predating the userinfo.email OAuth
+// scope fix, when lastUpdatedBy was never captured at all -- see console
+// output for which source was used on each row). Not wired to any button
+// since it's a one-off; sign in, open the console, and call
+// runAttributionBackfill(). Safe to run more than once -- it only ever
+// touches rows still missing a given field, so it never overwrites real
+// attribution data (including data written by an earlier run itself).
 async function runAttributionBackfill() {
   if (!accessToken) { console.warn('Sign in first, then re-run.'); return; }
   if (!inquiries.length) { console.warn('No inquiries loaded yet -- wait for the board to finish loading, then re-run.'); return; }
+  if (!currentUserEmail) { console.warn('currentUserEmail is blank -- sign out and back in first (needed as the fallback credit for rows with no lastUpdatedBy).'); return; }
 
   const STAGE_ORDER = { new: 0, quoted: 1, contracted: 2, invoiced: 3 };
 
@@ -841,21 +844,24 @@ async function runAttributionBackfill() {
   const plan = [];
   const skipped = [];
   inquiries.forEach(inq => {
-    if (!inq.lastUpdatedBy) { skipped.push(`${inq.refId}: no lastUpdatedBy to backfill from`); return; }
+    // Best available credit source: real lastUpdatedBy if we have it,
+    // otherwise the currently signed-in user as a best-effort guess.
+    const creditEmail = inq.lastUpdatedBy || currentUserEmail;
+    const source = inq.lastUpdatedBy ? 'lastUpdatedBy' : 'currently-signed-in (guess)';
     const stage = STAGE_ORDER[inq.status] || 0;
     if (stage >= 1) {
       if (inq.quotedBy) { /* already set */ }
-      else if (inq.quoteData) plan.push({ inq, field: 'quotedBy' });
+      else if (inq.quoteData) plan.push({ inq, field: 'quotedBy', email: creditEmail, source });
       else skipped.push(`${inq.refId}: status is '${inq.status}' but quoteData is empty -- can't credit a quote that isn't on file`);
     }
     if (stage >= 2) {
       if (inq.contractedBy) { /* already set */ }
-      else if (inq.contractGenerated === 'true') plan.push({ inq, field: 'contractedBy' });
+      else if (inq.contractGenerated === 'true') plan.push({ inq, field: 'contractedBy', email: creditEmail, source });
       else skipped.push(`${inq.refId}: status is '${inq.status}' but contractGenerated is '${inq.contractGenerated}', not 'true'`);
     }
     if (stage >= 3) {
       if (inq.invoicedBy) { /* already set */ }
-      else if (inq.invoiceData) plan.push({ inq, field: 'invoicedBy' });
+      else if (inq.invoiceData) plan.push({ inq, field: 'invoicedBy', email: creditEmail, source });
       else skipped.push(`${inq.refId}: status is 'invoiced' but invoiceData is empty -- can't credit an invoice that isn't on file`);
     }
   });
@@ -863,12 +869,13 @@ async function runAttributionBackfill() {
   if (skipped.length) { console.log(`${skipped.length} skip reason(s):`); skipped.forEach(s => console.log('  ' + s)); }
 
   if (!plan.length) { console.log('Nothing queued to write -- see the table/skip reasons above for why.'); return; }
-  console.log(`Backfilling ${plan.length} field(s) across ${new Set(plan.map(p=>p.inq.refId)).size} deal(s)...`);
+  const guessedCount = plan.filter(p => p.source !== 'lastUpdatedBy').length;
+  console.log(`Backfilling ${plan.length} field(s) across ${new Set(plan.map(p=>p.inq.refId)).size} deal(s) (${plan.length - guessedCount} from lastUpdatedBy, ${guessedCount} guessed as ${currentUserEmail})...`);
 
   let ok = 0, failed = 0;
-  for (const { inq, field } of plan) {
-    const success = await writeAttribution(inq.rowIndex, field, inq.lastUpdatedBy);
-    if (success) { inq[field] = inq.lastUpdatedBy; ok++; console.log(`  wrote ${field} = ${inq.lastUpdatedBy} for ${inq.refId} (row ${inq.rowIndex})`); }
+  for (const { inq, field, email, source } of plan) {
+    const success = await writeAttribution(inq.rowIndex, field, email);
+    if (success) { inq[field] = email; ok++; console.log(`  wrote ${field} = ${email} for ${inq.refId} (row ${inq.rowIndex}, source: ${source})`); }
     else { failed++; console.warn(`  FAILED: ${field} on ${inq.refId} (row ${inq.rowIndex})`); }
   }
   console.log(`Backfill done. ${ok} written, ${failed} failed.`);
@@ -876,7 +883,7 @@ async function runAttributionBackfill() {
 }
 window.runAttributionBackfill = runAttributionBackfill;
 
-
+// Writes the A:Y intake-field range (Contact/Event/Logistics/Budget/Notes) --
 // the original fields the intake form captures, as opposed to writeRow()'s
 // Z:AK hub-managed range. Used by the detail panel's edit mode. `values`
 // must be 25 entries starting with timestamp, refId.
