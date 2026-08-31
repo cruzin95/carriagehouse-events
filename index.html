@@ -822,23 +822,54 @@ async function runAttributionBackfill() {
   if (!inquiries.length) { console.warn('No inquiries loaded yet -- wait for the board to finish loading, then re-run.'); return; }
 
   const STAGE_ORDER = { new: 0, quoted: 1, contracted: 2, invoiced: 3 };
+
+  // Diagnostic dump first, always -- so it's visible *why* a deal was or
+  // wasn't queued, rather than just a pass/fail count at the end.
+  console.log(`--- Attribution backfill diagnostics (${inquiries.length} inquiries loaded) ---`);
+  console.table(inquiries.map(inq => ({
+    refId: inq.refId,
+    status: inq.status,
+    hasQuoteData: !!inq.quoteData,
+    contractGenerated: inq.contractGenerated,
+    hasInvoiceData: !!inq.invoiceData,
+    lastUpdatedBy: inq.lastUpdatedBy || '(blank)',
+    quotedBy: inq.quotedBy || '(blank)',
+    contractedBy: inq.contractedBy || '(blank)',
+    invoicedBy: inq.invoicedBy || '(blank)',
+  })));
+
   const plan = [];
+  const skipped = [];
   inquiries.forEach(inq => {
-    if (!inq.lastUpdatedBy) return; // nothing to backfill from
+    if (!inq.lastUpdatedBy) { skipped.push(`${inq.refId}: no lastUpdatedBy to backfill from`); return; }
     const stage = STAGE_ORDER[inq.status] || 0;
-    if (stage >= 1 && inq.quoteData && !inq.quotedBy) plan.push({ inq, field: 'quotedBy' });
-    if (stage >= 2 && inq.contractGenerated === 'true' && !inq.contractedBy) plan.push({ inq, field: 'contractedBy' });
-    if (stage >= 3 && inq.invoiceData && !inq.invoicedBy) plan.push({ inq, field: 'invoicedBy' });
+    if (stage >= 1) {
+      if (inq.quotedBy) { /* already set */ }
+      else if (inq.quoteData) plan.push({ inq, field: 'quotedBy' });
+      else skipped.push(`${inq.refId}: status is '${inq.status}' but quoteData is empty -- can't credit a quote that isn't on file`);
+    }
+    if (stage >= 2) {
+      if (inq.contractedBy) { /* already set */ }
+      else if (inq.contractGenerated === 'true') plan.push({ inq, field: 'contractedBy' });
+      else skipped.push(`${inq.refId}: status is '${inq.status}' but contractGenerated is '${inq.contractGenerated}', not 'true'`);
+    }
+    if (stage >= 3) {
+      if (inq.invoicedBy) { /* already set */ }
+      else if (inq.invoiceData) plan.push({ inq, field: 'invoicedBy' });
+      else skipped.push(`${inq.refId}: status is 'invoiced' but invoiceData is empty -- can't credit an invoice that isn't on file`);
+    }
   });
 
-  if (!plan.length) { console.log('Nothing to backfill -- every eligible deal already has attribution.'); return; }
+  if (skipped.length) { console.log(`${skipped.length} skip reason(s):`); skipped.forEach(s => console.log('  ' + s)); }
+
+  if (!plan.length) { console.log('Nothing queued to write -- see the table/skip reasons above for why.'); return; }
   console.log(`Backfilling ${plan.length} field(s) across ${new Set(plan.map(p=>p.inq.refId)).size} deal(s)...`);
 
   let ok = 0, failed = 0;
   for (const { inq, field } of plan) {
     const success = await writeAttribution(inq.rowIndex, field, inq.lastUpdatedBy);
-    if (success) { inq[field] = inq.lastUpdatedBy; ok++; }
-    else { failed++; console.warn(`Failed: ${field} on ${inq.refId}`); }
+    if (success) { inq[field] = inq.lastUpdatedBy; ok++; console.log(`  wrote ${field} = ${inq.lastUpdatedBy} for ${inq.refId} (row ${inq.rowIndex})`); }
+    else { failed++; console.warn(`  FAILED: ${field} on ${inq.refId} (row ${inq.rowIndex})`); }
   }
   console.log(`Backfill done. ${ok} written, ${failed} failed.`);
   if (ok) { renderBoard(); showToast(`Backfilled attribution on ${ok} field(s) ✓`); }
@@ -988,8 +1019,12 @@ function renderBoard() {
   const buckets = { new: [], quoted: [], contracted: [], invoiced: [], stale: [], dead: [] };
   inquiries.forEach(inq => {
     const s = inq.status || 'new';
+    // Test entries pile up in Dead once someone's done poking at them --
+    // they're still real rows (findable via search, editable, etc.), just
+    // not worth cluttering the one column that's pure "no longer relevant."
+    if (s === 'dead' && looksLikeTest(inq)) return;
+    if (s === 'cancelled') { if (!looksLikeTest(inq)) buckets.dead.push(inq); return; } // legacy status, folded into Dead
     if (buckets[s]) buckets[s].push(inq);
-    else if (s === 'cancelled') buckets.dead.push(inq); // legacy status, folded into Dead
     else buckets.new.push(inq);
   });
 
