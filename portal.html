@@ -172,6 +172,12 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
 .li.ovr .rst{opacity:1}
 .li .rst:hover{color:var(--amber)}
 .li.muted .ln{color:var(--muted-2)}
+.li .comp{background:none;border:none;color:var(--muted-2);font-family:var(--mono);font-size:10px;letter-spacing:.04em;padding:0 2px;opacity:0;transition:.12s;text-transform:uppercase}
+.li:hover .comp{opacity:1}
+.li.comped .comp{opacity:1;color:var(--amber)}
+.li.comped .ln{color:var(--muted-2)}
+.li .lp-was{color:var(--muted-2);font-weight:400;text-decoration:line-through;margin-right:6px}
+.li .lp-zero{color:var(--amber);font-weight:600}
 
 /* totals */
 .totals{margin-top:18px;padding-top:14px;border-top:1px solid var(--line-2)}
@@ -276,11 +282,13 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
   .split{display:block}
   .doc,.cdoc{position:static;border:none;box-shadow:none;max-height:none;border-radius:0}
   .doc{background:#fff;color:#111}
-  .doc .li .ln,.doc .li .lp,.doc .tl-line .v,.doc .doc-head .dt,.doc .doc-head .dmeta{color:#111}
+  .doc .li .ln,.doc .li .lp,.doc .li .lp-was,.doc .li .lp-zero,.doc .tl-line .v,.doc .doc-head .dt,.doc .doc-head .dmeta{color:#111}
+  .doc .li .lp-was{color:#888;text-decoration:line-through}
+  .doc .li .lp-zero{color:#111;font-weight:700}
   .doc .sched{background:#f4f1ea;border-color:#d9d4c6}
   .doc .sched .sk,.doc .sched .sk b,.doc .sched .sv,.doc .sched-h{color:#111!important}
   .doc input,.doc .pedit{color:#111!important;border:none!important;background:transparent!important;-webkit-appearance:none;appearance:none;width:auto;padding:0}
-  .li .rst,.li .ovrdot{display:none!important}
+  .li .rst,.li .ovrdot,.li .comp{display:none!important}
   .cdoc{padding:0}
 }
 </style>
@@ -385,9 +393,9 @@ const STAFF_DEFAULTS = [
   {id:'tech', label:'Production / AV tech', rate:50, count:1}
 ];
 const SUPPLY_DEFAULTS = [
-  {id:'bar', label:'Bar supplies & consumables', price:600},
+  {id:'bar', label:'Bar supplies & consumables', price:0},
   {id:'decor', label:'Décor', price:0},
-  {id:'misc', label:'Miscellaneous buffer', price:150}
+  {id:'misc', label:'Miscellaneous buffer', price:0}
 ];
 const SPONSOR_CATS = ['Venue','Equipment','Staff','Supplies','Cleaning','Custom'];
 
@@ -408,6 +416,7 @@ function freshState(){
     sponsors: [],
     adj:{ discount:0, surcharge:0, taxRate:8.875, depositPct:20, depositCredited:false },
     overrides:{},
+    comps:{},
     depositOverride:null,
     contract:{
       signDate:new Date().toISOString().slice(0,10),
@@ -466,21 +475,29 @@ function computeLines(){
   const dw = dowInfo(S.event.date);
   const hrs = num(S.event.hours);
   const customOn = (S.venue.customBase!=null && S.venue.customBase!=='');
+  // Normal (tier × day-of-week × hours) rate, computed regardless of whether
+  // custom mode is on -- used to show what this event would have cost at
+  // standard pricing, so a custom rate that undercuts it reads as a visible
+  // discount rather than silently replacing the number.
+  let normalBase = tier.rate*dw.mult;
+  if(hrs>INCLUDED_HOURS) normalBase += (hrs-INCLUDED_HOURS)*EXTRA_HOUR_RATE;
   let base, baseNote;
   if(customOn){ base = num(S.venue.customBase); baseNote = 'Custom rental fee'; }
   else {
-    base = tier.rate*dw.mult;
-    if(hrs>INCLUDED_HOURS) base += (hrs-INCLUDED_HOURS)*EXTRA_HOUR_RATE;
+    base = normalBase;
     baseNote = tier.label+', '+hrs+' hrs, '+dw.label;
   }
-  const push=(id,cat,label,note,computed,show=true)=>{
+  const venueBaseCompare = (customOn && normalBase > base) ? normalBase : null;
+  const push=(id,cat,label,note,computed,show=true,compareFrom=null)=>{
     if(!show) return;
     const ov = S.overrides[id];
-    const price = (ov!=null && ov!=='')? num(ov): computed;
-    g.push({id,cat,label,note,computed:Math.round(computed),price:Math.round(price),ovr:(ov!=null&&ov!=='')});
+    const comped = !!S.comps[id];
+    const rawPrice = (ov!=null && ov!=='')? num(ov): computed;
+    const price = comped ? 0 : rawPrice;
+    g.push({id,cat,label,note,computed:Math.round(computed),rawPrice:Math.round(rawPrice),price:Math.round(price),ovr:(ov!=null&&ov!==''),comped,compareFrom:compareFrom!=null?Math.round(compareFrom):null});
     sub[cat]+=Math.round(price);
   };
-  push('venue-base','venue','Base rental', baseNote, base);
+  push('venue-base','venue','Base rental', baseNote, base, true, venueBaseCompare);
   push('venue-loadin','venue','Setup / load-in', num(S.event.loadInHours)+' hrs × $'+LOADIN_RATE, num(S.event.loadInHours)*LOADIN_RATE, num(S.event.loadInHours)>0);
   push('venue-cleaning','venue','Cleaning fee','', num(S.venue.cleaning), num(S.venue.cleaning)>0);
   if(S.sec.prod) S.prod.forEach(p=>{ if(p.on) push('prod-'+p.id,'prod',p.label,'', num(p.price)); });
@@ -535,13 +552,13 @@ function renderQuoteControls(){
     <div class="togrow ${p.on?'':'off'}">
       <div class="sw ${p.on?'on':''}" onclick="Portal.toggleProd(${i})"></div>
       <div class="tl">${esc(p.label)}</div>
-      <div class="money mini-money"><input class="inp" value="${p.price}" oninput="Portal.prodEdit(${i},this.value)"></div>
+      <div class="money mini-money"><input class="inp" value="${p.price}" oninput="Portal.prodEdit(${i},this.value)" onblur="Portal.prodRateCommit(${i})" title="Editing saves this as the new default price for '${esc(p.label)}' on future quotes"></div>
       <button class="xbtn" title="Remove from this quote" onclick="Portal.prodDel(${i})">✕</button>
     </div>`).join('');
   const staffRows = S.staff.map((s,i)=>`
     <div class="role">
       <div class="rname">${esc(s.label)}<small>per hour × count</small></div>
-      <div><div class="rlabel">Rate</div><div class="money"><input class="inp" value="${s.rate}" oninput="Portal.staffEdit(${i},'rate',this.value)"></div></div>
+      <div><div class="rlabel">Rate</div><div class="money"><input class="inp" value="${s.rate}" oninput="Portal.staffEdit(${i},'rate',this.value)" onblur="Portal.staffRateCommit(${i})" title="Editing saves this as the new default rate for '${esc(s.label)}' on future quotes"></div></div>
       <div><div class="rlabel">Qty</div><input class="inp" value="${s.count}" oninput="Portal.staffEdit(${i},'count',this.value)"></div>
       <button class="xbtn" title="Remove from this quote" onclick="Portal.staffDel(${i})">✕</button>
     </div>`).join('');
@@ -602,9 +619,16 @@ function renderQuoteControls(){
         <div class="sw ${customOn?'on':''}" onclick="Portal.toggleCustomBase()"></div>
         <div class="tl">Custom rental fee<small>flat rate — ignores tier, day, and hours</small></div>
       </div>
-      ${customOn ? `
+      ${customOn ? (()=>{
+        const t=TIERS.find(x=>x.id===S.venue.tier)||TIERS[0], dw=dowInfo(S.event.date), hrs=num(S.event.hours);
+        let normalBase = t.rate*dw.mult;
+        if(hrs>INCLUDED_HOURS) normalBase += (hrs-INCLUDED_HOURS)*EXTRA_HOUR_RATE;
+        const custom = num(S.venue.customBase);
+        const savings = normalBase - custom;
+        return `
       <div class="field" style="margin-top:12px"><label>Custom rental fee</label><div class="money"><input class="inp" value="${S.venue.customBase}" oninput="Portal.setCustomBase(this.value)"></div></div>
-      ` : `
+      ${savings>0 ? `<div class="hint" style="color:var(--amber)">Normal rate for ${esc(t.label)}, ${hrs} hrs, ${dw.label} would be ${fmt0(normalBase)} — this custom fee is ${fmt0(savings)} less. Shown struck through on the quote.</div>` : ''}`;
+      })() : `
       <div class="field" style="margin-top:12px"><label>Occupancy tier</label>
         <select class="inp" onchange="Portal.set('venue.tier',this.value,'quote')">${TIERS.map(t=>`<option value="${t.id}" ${S.venue.tier===t.id?'selected':''}>${t.label} — ${fmt0(t.rate)} base</option>`).join('')}</select>
       </div>
@@ -667,10 +691,15 @@ function renderQuoteControls(){
 
 /* ---------------- QUOTE: document (right) ---------------- */
 function lineRow(l){
-  return `<div class="li ${l.ovr?'ovr':''} ${l.price===0?'muted':''}" data-lid="${l.id}">
+  const compBtn = `<button class="comp no-print" title="${l.comped?'Remove comp — restore normal pricing':'Comp this item — charge $0, show original price struck through'}" onclick="Portal.toggleComp('${l.id}')">${l.comped?'↺':'comp'}</button>`;
+  const wasHtml = (!l.comped && l.compareFrom!=null && l.compareFrom>l.price) ? `<s class="lp-was" title="Normal rate at standard tier/day/hours pricing">$${l.compareFrom.toLocaleString('en-US')}</s>` : '';
+  const priceHtml = l.comped
+    ? `<span class="lp"><s class="lp-was">$${l.rawPrice.toLocaleString('en-US')}</s><span class="lp-zero">$0</span>${compBtn}</span>`
+    : `<span class="lp">${wasHtml}<span class="ovrdot"></span><button class="rst no-print" title="Reset to calculated" onclick="Portal.resetLine('${l.id}')">↺</button>$<input class="pedit" value="${l.price.toLocaleString('en-US')}" onfocus="this.select()" oninput="Portal.priceEdit('${l.id}',this.value)">${compBtn}</span>`;
+  return `<div class="li ${l.ovr?'ovr':''} ${l.comped?'comped':''} ${(l.price===0 && !l.comped)?'muted':''}" data-lid="${l.id}">
     <span class="ln">${esc(l.label)}${l.note?` <small>${esc(l.note)}</small>`:''}</span>
     <span class="lead"></span>
-    <span class="lp"><span class="ovrdot"></span><button class="rst no-print" title="Reset to calculated" onclick="Portal.resetLine('${l.id}')">↺</button>$<input class="pedit" value="${l.price.toLocaleString('en-US')}" onfocus="this.select()" oninput="Portal.priceEdit('${l.id}',this.value)"></span>
+    ${priceHtml}
   </div>`;
 }
 function renderQuoteDoc(){
@@ -748,6 +777,12 @@ function set(path,val,repaint){ setPath(path,val); if(repaint==='quote') renderQ
 function toggleProd(i){ S.prod[i].on=!S.prod[i].on; renderQuoteControls(); renderQuoteDoc(); }
 function prodEdit(i,v){ S.prod[i].price=num(v); renderQuoteDoc(); }
 function staffEdit(i,k,v){ S.staff[i][k]=num(v); renderQuoteDoc(); }
+// Fired on blur (not on every keystroke) so the catalog only gets one write
+// per edit, not one per character typed. This is what makes a price edit on
+// a live quote "stick" as the new default for that item going forward --
+// separate from priceEdit()/overrides, which only affect this one quote.
+function prodRateCommit(i){ const p=S.prod[i]; if(p && window.Hub && Hub.saveCatalogRate) Hub.saveCatalogRate('prod',p.label,num(p.price)); }
+function staffRateCommit(i){ const s=S.staff[i]; if(s && window.Hub && Hub.saveCatalogRate) Hub.saveCatalogRate('staff',s.label,num(s.rate)); }
 
 /* ---- custom production/staffing line items (this-quote removal + reusable catalog) ---- */
 function catalogChipsHtml(section){
@@ -807,6 +842,11 @@ function toggleCustomBase(){
 function setCustomBase(v){ S.venue.customBase = num(v); renderQuoteDoc(); }
 function priceEdit(id,v){ const row=document.querySelector(`[data-lid="${id}"]`); if(v.trim()===''){ delete S.overrides[id]; } else { S.overrides[id]=num(v); } if(row) row.classList.toggle('ovr', S.overrides[id]!=null); repaintQuoteTotals(); }
 function resetLine(id){ delete S.overrides[id]; renderQuoteDoc(); }
+// Comp = charge $0 for this line while still listing it, struck through, at
+// its normal price -- a visible discount rather than a silent price edit.
+// Independent of overrides: comping remembers whatever price (calculated or
+// overridden) was in effect, and un-comping restores exactly that.
+function toggleComp(id){ if(S.comps[id]) delete S.comps[id]; else S.comps[id]=true; renderQuoteDoc(); }
 function depEdit(v){ S.depositOverride = v.trim()===''? null : num(v); repaintQuoteTotals(); }
 function toggleDepCredit(){ S.adj.depositCredited = !(S.adj.depositCredited!==false); if(S.invoice.pulled) pullInvoice(); renderQuoteControls(); renderQuoteDoc(); renderContract(); renderInvoice(); }
 function sponsorAdd(){ S.sponsors.push({id:'s'+Date.now(),name:'',amount:0,category:'Venue',status:'confirmed'}); renderQuoteControls(); renderQuoteDoc(); }
@@ -822,7 +862,7 @@ function quotePlainText(){
   if(S.client.name) L.push('Client: '+S.client.name+(S.client.company?' ('+S.client.company+')':''));
   if(S.event.date) L.push('Date: '+longDate(parseDate(S.event.date)));
   L.push('');
-  const cat=(title,c,subv)=>{ L.push('── '+title.toUpperCase()+' '.padEnd(1)+'— '+fmt0(subv)); t.lines.filter(l=>l.cat===c).forEach(l=>{ L.push('   '+l.label+(l.note?' ('+l.note+')':'')+'  '+fmt0(l.price)); }); };
+  const cat=(title,c,subv)=>{ L.push('── '+title.toUpperCase()+' '.padEnd(1)+'— '+fmt0(subv)); t.lines.filter(l=>l.cat===c).forEach(l=>{ L.push('   '+l.label+(l.note?' ('+l.note+')':'')+'  '+(l.comped?'COMP\'D (was '+fmt0(l.rawPrice)+') $0':fmt0(l.price))); }); };
   cat('Venue rental','venue',t.venueTotal);
   if(S.sec.prod) cat('Production & equipment','prod',t.equipTotal);
   if(S.sec.staff) cat('Staff & supplies','staff',t.staffTotal);
@@ -1221,7 +1261,7 @@ function boot(){
   go(S.stage||'quote');
 }
 
-return { go, togglePresent, set, toggleProd, prodEdit, staffEdit, supplyEdit, priceEdit, resetLine, depEdit,
+return { go, togglePresent, set, toggleProd, prodEdit, staffEdit, prodRateCommit, staffRateCommit, supplyEdit, priceEdit, resetLine, toggleComp, depEdit,
   toggleSec, toggleCustomBase, setCustomBase, toggleDepCredit,
   prodDel, staffDel, prodAddCustom, staffAddCustom, prodAddFromCatalogEl, staffAddFromCatalogEl, prodDelCatalogEl, staffDelCatalogEl,
   sponsorAdd, sponsorDel, sponsorEdit, copyQuote,
@@ -1689,6 +1729,32 @@ async function persistCatalogItem(section,label,rate){
     catalog[section].push({ rowIndex: m?parseInt(m[1],10):null, id, label, rate });
     if(window.Portal && Portal._refreshControls) Portal._refreshControls();
   }catch(e){ /* item still works in this quote even if the catalog write failed */ }
+}
+// Permanently updates an item's catalog rate to match what was just edited
+// on a live quote -- so the next quote that pulls this item in starts from
+// the new price instead of the old one. Matches by label (same case-
+// insensitive comparison used everywhere else for catalog dedup). If the
+// item isn't in the catalog yet (e.g. it predates the catalog feature, or
+// was added to this quote before ever being saved), it's inserted fresh
+// with the new rate rather than silently doing nothing.
+async function saveCatalogRate(section,label,rate){
+  if(!ctx.active || !token() || !label) return;
+  const match = (catalog[section]||[]).find(c=>c.label.trim().toLowerCase()===label.trim().toLowerCase());
+  if(!match){ await persistCatalogItem(section,label,rate); return; }
+  if(match.rate === rate) return; // no change, skip the write
+  try{
+    const ok = await ensureCatalogSheet();
+    if(!ok) return;
+    const range = encodeURIComponent(`${CATALOG_TAB}!D${match.rowIndex}`);
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueInputOption=RAW`,{
+      method:'PUT',
+      headers:{ Authorization:'Bearer '+token(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ values:[[rate]] }),
+    });
+    if(!r.ok) return;
+    match.rate = rate;
+    if(window.Portal && Portal._refreshControls) Portal._refreshControls();
+  }catch(e){ /* the quote itself already has the new price regardless -- catalog update is best-effort */ }
 }
 async function deleteCatalogItem(section,id){
   const item = (catalog[section]||[]).find(c=>c.id===id);
@@ -2318,7 +2384,7 @@ const _go = Portal.go;
 Portal.go = function(s){ _go(s); renderBar(); };
 
 return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, sendFollowUp, sendNoDate, sendPaymentReminder, sendThankYou,
-  onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, deleteCatalogItem,
+  onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, saveCatalogRate, deleteCatalogItem,
   onDateInput, repaintDateAvail, checkDateAvailability, createHubCard,
   toggleInquiryEdit, saveInquiryEdits, cancelInquiryEdit,
   _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText, _draftOnly:draftOnly };
