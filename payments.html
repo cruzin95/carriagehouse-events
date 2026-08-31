@@ -209,6 +209,7 @@ const COL = {
   status:25, quoteTotal:26, quoteData:27, contractGenerated:28, lastUpdatedBy:29, calendarEventId:30,
   invoiceData:31, invoiceTotal:32, starred:33, followupDate:34,
   lastActivityAt:35, lastAutoDraftAt:36, eventTitle:37,
+  quotedBy:42, contractedBy:43, invoicedBy:44,
 };
 
 let tokenClient, accessToken = null, currentUserEmail = '';
@@ -216,7 +217,7 @@ let inquiries = [];
 let activeFilter = 'all';
 
 // ── ACCESS GATE (identical to index.html) ──────────────────────────────
-const GATE_CODE = '1070';
+const GATE_CODE = '1395';
 const GATE_KEY  = '170e_gate_ok';
 function checkGate(){
   const input = document.getElementById('gate-input');
@@ -329,6 +330,7 @@ function parseRow(row, rowIndex) {
     starred: row[COL.starred] === 'true' ? true : row[COL.starred] === 'false' ? false : undefined,
     followupDate: row[COL.followupDate] || '', lastAutoDraftAt: row[COL.lastAutoDraftAt] || '',
     eventTitle: row[COL.eventTitle] || '',
+    quotedBy: row[COL.quotedBy] || '', contractedBy: row[COL.contractedBy] || '', invoicedBy: row[COL.invoicedBy] || '',
   };
 }
 
@@ -469,6 +471,7 @@ function invoiceCardHtml(inq) {
           <span>${fmtDateShort(inq.eventDate)}</span>
           <span>${escHtml(inv.number||inq.refId)}</span>
           <span class="status-badge ${escHtml(inq.status||'new')}">${escHtml(inq.status||'new')}</span>
+          ${inq.invoicedBy ? `<span title="Invoiced by">Invoiced by ${escHtml(inq.invoicedBy)}</span>` : ''}
         </div>
       </div>
       ${overdue ? `<span class="overdue-tag">Overdue</span>` : ''}

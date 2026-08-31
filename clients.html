@@ -99,6 +99,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .deal-main{flex:1;min-width:0}
 .deal-title{font-size:.85rem;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .deal-sub{font-family:var(--mono);font-size:.68rem;color:var(--muted-2);margin-top:2px}
+.deal-attr{color:var(--muted-2)}
 .deal-badge{font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:99px;flex-shrink:0}
 .deal-badge.new{background:var(--new-bg);color:var(--new-text)}
 .deal-badge.quoted{background:var(--quoted-bg);color:var(--quoted-text)}
@@ -198,6 +199,7 @@ const COL = {
   invoiceData:31, invoiceTotal:32, starred:33, followupDate:34,
   lastActivityAt:35, lastAutoDraftAt:36, eventTitle:37, returningClient:38,
   eventRating:39, internalNotes:40, problemClient:41,
+  quotedBy:42, contractedBy:43, invoicedBy:44,
 };
 
 let tokenClient, accessToken = null, currentUserEmail = '';
@@ -206,7 +208,7 @@ let clients = []; // grouped
 let sortBy = 'recent';
 
 // ── ACCESS GATE (identical to index.html) ──────────────────────────────
-const GATE_CODE = '1070';
+const GATE_CODE = '1395';
 const GATE_KEY  = '170e_gate_ok';
 function checkGate(){
   const input = document.getElementById('gate-input');
@@ -332,6 +334,7 @@ function parseRow(row, rowIndex) {
     eventRating: parseInt(row[COL.eventRating], 10) || 0,
     internalNotes: row[COL.internalNotes] || '',
     problemClient: row[COL.problemClient] === 'true',
+    quotedBy: row[COL.quotedBy] || '', contractedBy: row[COL.contractedBy] || '', invoicedBy: row[COL.invoicedBy] || '',
   };
 }
 
@@ -500,11 +503,17 @@ function renderClients() {
       const title = d.eventTitle || d.eventType || 'Untitled event';
       const stars = d.eventRating > 0 ? `<span class="deal-rating" title="${d.eventRating}/5">${'★'.repeat(d.eventRating)}${'☆'.repeat(5-d.eventRating)}</span>` : '';
       const flag = d.problemClient ? '<span class="flag-tag" title="Flagged as a problem client">⚠ Flagged</span>' : '';
+      // Show whoever hit the deal's furthest milestone -- invoiced beats
+      // contracted beats quoted, since that's the most relevant credit at
+      // the deal's current stage.
+      const attrBy = d.invoicedBy || d.contractedBy || d.quotedBy || '';
+      const attrLabel = d.invoicedBy ? 'Invoiced by' : d.contractedBy ? 'Contracted by' : d.quotedBy ? 'Quoted by' : '';
+      const attrHtml = attrBy ? ` · <span class="deal-attr" title="${escHtml(attrLabel)}">${escHtml(attrLabel)}: ${escHtml(attrBy)}</span>` : '';
       return `<div class="deal-row">
         <span class="deal-badge ${escHtml(d.status||'new')}">${escHtml(d.status||'new')}</span>
         <div class="deal-main">
           <div class="deal-title">${escHtml(title)}${flag}</div>
-          <div class="deal-sub">${fmtDateShort(d.eventDate)} · ${escHtml(d.refId)}${stars ? ' · '+stars : ''}</div>
+          <div class="deal-sub">${fmtDateShort(d.eventDate)} · ${escHtml(d.refId)}${stars ? ' · '+stars : ''}${attrHtml}</div>
           ${d.internalNotes ? `<div class="deal-notes">${escHtml(d.internalNotes)}</div>` : ''}
         </div>
         <div class="deal-value">${dealValue(d) > 0 ? '$'+dealValue(d).toLocaleString() : ''}</div>

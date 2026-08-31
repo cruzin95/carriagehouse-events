@@ -504,6 +504,12 @@ const COL = {
   // writeInternalReview() -- a dedicated AN:AP write, separate from the
   // Z:AK batch (see the comment on writeInternalReview for why).
   eventRating:39, internalNotes:40, problemClient:41,
+  // Milestone attribution -- who first quoted/contracted/invoiced this deal.
+  // First-write-wins: set once by flushPendingWrites() and never overwritten
+  // by later re-saves from a different user. Its own small AQ:AS write, same
+  // pattern as writeInternalReview(), so it can never race with or clobber
+  // status/quote data.
+  quotedBy:42, contractedBy:43, invoicedBy:44,
 };
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -525,7 +531,7 @@ let detailEditMode = false; // whether the detail panel's Contact/Event/Logistic
 // the first thing a casual visitor sees when landing on the URL -- it does
 // not add protection beyond that. The actual access control is still the
 // Google sign-in screen behind it, and the Sheet's own sharing settings.
-const GATE_CODE = '1070';
+const GATE_CODE = '1395';
 const GATE_KEY  = '170e_gate_ok';
 
 function checkGate(){
@@ -727,6 +733,9 @@ function parseRow(row, rowIndex) {
     eventRating:     parseInt(row[COL.eventRating], 10) || 0,
     internalNotes:   row[COL.internalNotes]    || '',
     problemClient:   row[COL.problemClient]    === 'true',
+    quotedBy:        row[COL.quotedBy]         || '',
+    contractedBy:    row[COL.contractedBy]     || '',
+    invoicedBy:      row[COL.invoicedBy]       || '',
   };
 }
 
@@ -777,7 +786,66 @@ async function writeRow(rowIndex, values) {
   return resp.ok;
 }
 
-// Writes the A:Y intake-field range (Contact/Event/Logistics/Budget/Notes) --
+// Writes a single milestone-attribution cell (AQ quotedBy / AR contractedBy /
+// AS invoicedBy). Callers only invoke this the first time a milestone is
+// reached (see flushPendingWrites) -- re-saving an existing quote/contract/
+// invoice never calls this again, so credit stays with whoever first hit
+// that milestone. Its own tiny write, separate from the Z:AK batch, so it
+// can never race with or overwrite status/quote data.
+async function writeAttribution(rowIndex, field, email) {
+  const letter = colLetter(COL[field]);
+  const range = encodeURIComponent(`${CONFIG.TAB}!${letter}${rowIndex}:${letter}${rowIndex}`);
+  const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
+
+  const resp = await fetch(url, {
+    method:  'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ values: [[email || '']] }),
+  });
+
+  if (resp.status === 401) { handleAuthExpired(); return false; }
+  return resp.ok;
+}
+
+// ── ONE-TIME BACKFILL (run once from the browser console) ──────────────
+// Deals that reached quoted/contracted/invoiced *before* the AQ:AS
+// attribution columns existed have no quotedBy/contractedBy/invoicedBy on
+// file. This gives them a starting value using the best data available --
+// lastUpdatedBy (whoever's Google account most recently saved the row) --
+// rather than leaving history blank. Not wired to any button since it's a
+// one-off; sign in, open the console, and call runAttributionBackfill().
+// Safe to run more than once -- it only ever touches rows that are still
+// missing a given field, so it never overwrites real attribution data
+// (including data written by the earlier run itself).
+async function runAttributionBackfill() {
+  if (!accessToken) { console.warn('Sign in first, then re-run.'); return; }
+  if (!inquiries.length) { console.warn('No inquiries loaded yet -- wait for the board to finish loading, then re-run.'); return; }
+
+  const STAGE_ORDER = { new: 0, quoted: 1, contracted: 2, invoiced: 3 };
+  const plan = [];
+  inquiries.forEach(inq => {
+    if (!inq.lastUpdatedBy) return; // nothing to backfill from
+    const stage = STAGE_ORDER[inq.status] || 0;
+    if (stage >= 1 && inq.quoteData && !inq.quotedBy) plan.push({ inq, field: 'quotedBy' });
+    if (stage >= 2 && inq.contractGenerated === 'true' && !inq.contractedBy) plan.push({ inq, field: 'contractedBy' });
+    if (stage >= 3 && inq.invoiceData && !inq.invoicedBy) plan.push({ inq, field: 'invoicedBy' });
+  });
+
+  if (!plan.length) { console.log('Nothing to backfill -- every eligible deal already has attribution.'); return; }
+  console.log(`Backfilling ${plan.length} field(s) across ${new Set(plan.map(p=>p.inq.refId)).size} deal(s)...`);
+
+  let ok = 0, failed = 0;
+  for (const { inq, field } of plan) {
+    const success = await writeAttribution(inq.rowIndex, field, inq.lastUpdatedBy);
+    if (success) { inq[field] = inq.lastUpdatedBy; ok++; }
+    else { failed++; console.warn(`Failed: ${field} on ${inq.refId}`); }
+  }
+  console.log(`Backfill done. ${ok} written, ${failed} failed.`);
+  if (ok) { renderBoard(); showToast(`Backfilled attribution on ${ok} field(s) ✓`); }
+}
+window.runAttributionBackfill = runAttributionBackfill;
+
+
 // the original fields the intake form captures, as opposed to writeRow()'s
 // Z:AK hub-managed range. Used by the detail panel's edit mode. `values`
 // must be 25 entries starting with timestamp, refId.
@@ -852,6 +920,11 @@ async function flushPendingWrites() {
         inq.quoteData = safeJson(quoteDataJson);
         if (calendarEventId) inq.calendarEventId = calendarEventId;
       }
+      // First-write-wins: only credit if no one has quoted this deal yet.
+      if (inq && !inq.quotedBy && currentUserEmail) {
+        writeAttribution(rowIndex, 'quotedBy', currentUserEmail);
+        inq.quotedBy = currentUserEmail;
+      }
       showToast('Quote saved ✓');
     }
   }
@@ -874,6 +947,10 @@ async function flushPendingWrites() {
         if (quoteDataJson) inq.quoteData = safeJson(quoteDataJson);
         if (calendarEventId) inq.calendarEventId = calendarEventId;
       }
+      if (inq && !inq.contractedBy && currentUserEmail) {
+        writeAttribution(rowIndex, 'contractedBy', currentUserEmail);
+        inq.contractedBy = currentUserEmail;
+      }
       showToast('Contract saved ✓');
     }
   }
@@ -895,6 +972,10 @@ async function flushPendingWrites() {
         inq.invoiceTotal = String(invoiceTotal);
         inq.invoiceData = safeJson(invoiceDataJson);
         if (quoteDataJson) inq.quoteData = safeJson(quoteDataJson);
+      }
+      if (inq && !inq.invoicedBy && currentUserEmail) {
+        writeAttribution(rowIndex, 'invoicedBy', currentUserEmail);
+        inq.invoicedBy = currentUserEmail;
       }
       showToast('Invoice saved ✓');
     }
@@ -1119,7 +1200,7 @@ function renderDetailBody(inq) {
 
     ${inq.notes ? `<div class="d-section"><div class="d-section-title">Notes</div><div class="d-notes">${escHtml(inq.notes)}</div></div>` : ''}
 
-    ${(inq.lastUpdatedBy || inq.calendarEventId) ? `<div class="d-section"><div class="d-section-title">Activity</div>${inq.lastUpdatedBy ? row('Last updated by', escHtml(inq.lastUpdatedBy)) : ''}${inq.calendarEventId ? row('Calendar hold', calendarEventLink(inq.calendarEventId) ? `<a href="${calendarEventLink(inq.calendarEventId)}" target="_blank" rel="noopener">✓ Open in Calendar →</a>` : '✓ Created') : ''}</div>` : ''}
+    ${(inq.lastUpdatedBy || inq.calendarEventId || inq.quotedBy || inq.contractedBy || inq.invoicedBy) ? `<div class="d-section"><div class="d-section-title">Activity</div>${inq.quotedBy ? row('Quoted by', escHtml(inq.quotedBy)) : ''}${inq.contractedBy ? row('Contracted by', escHtml(inq.contractedBy)) : ''}${inq.invoicedBy ? row('Invoiced by', escHtml(inq.invoicedBy)) : ''}${inq.lastUpdatedBy ? row('Last updated by', escHtml(inq.lastUpdatedBy)) : ''}${inq.calendarEventId ? row('Calendar hold', calendarEventLink(inq.calendarEventId) ? `<a href="${calendarEventLink(inq.calendarEventId)}" target="_blank" rel="noopener">✓ Open in Calendar →</a>` : '✓ Created') : ''}</div>` : ''}
 
     ${hasQt ? `
     <div class="d-section">
