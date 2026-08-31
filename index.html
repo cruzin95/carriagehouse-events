@@ -632,7 +632,7 @@ async function loadInquiries() {
   setLoading(true);
   clearError();
   try {
-    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AP`);
+    const range = encodeURIComponent(`${CONFIG.TAB}!A1:AS`);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}`;
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
