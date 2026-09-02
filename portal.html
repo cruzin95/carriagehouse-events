@@ -67,6 +67,7 @@ a{color:var(--amber)}
 .panel-head h3{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink)}
 .panel-head .ph-right{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
 .panel-body{padding:14px 15px}
+.ro-note{font-family:var(--mono);font-size:.72rem;color:var(--muted-2);letter-spacing:.03em;padding:20px 15px;text-align:center;border:1px dashed var(--line-2);border-radius:8px;margin:14px}
 
 /* ---- form fields ---- */
 .field{margin-bottom:12px}
@@ -366,6 +367,17 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Access tier (read from sessionStorage, set by whichever hub page this
+// was opened from -- index.html/payments.html etc. compute the actual
+// admin/readonly/blocked decision after Google sign-in). Portal.html has no
+// sign-in flow of its own, so it trusts that value. This is a UX layer, not
+// the real security boundary: the real boundary is whatever Google Sheets/
+// Calendar permissions the signed-in Google account actually has -- a
+// forged 'admin' value here still can't write to a Sheet/Calendar the
+// account only has Viewer access to.
+let userRole = sessionStorage.getItem('170e_role') || 'blocked';
+function isAdmin() { return userRole === 'admin'; }
+
 const Portal = (function(){
 "use strict";
 
@@ -546,6 +558,7 @@ function togglePresent(){
 /* ---------------- QUOTE: controls (left) ---------------- */
 function renderQuoteControls(){
   const c=$('quoteControls');
+  if(!isAdmin()){ c.innerHTML='<div class="ro-note">View only — quote details are locked. Sign in as an admin to edit.</div>'; return; }
   const customOn = (S.venue.customBase!=null && S.venue.customBase!=='');
   const credited = S.adj.depositCredited!==false;
   const prodRows = S.prod.map((p,i)=>`
@@ -999,6 +1012,7 @@ function contractDocHtml(){
   </div>`;
 }
 function renderContractControls(){
+  if(!isAdmin()){ $('contractControls').innerHTML='<div class="ro-note">View only — contract details are locked. Sign in as an admin to edit.</div>'; return; }
   const f=S.contract, x=contractCtx();
   const secList = SEC.filter(s=>s.id!=='residential').map(s=>{
     const on=f.sections[s.id];
@@ -1136,6 +1150,7 @@ function pullInvoice(){
   S.invoice.pulled=true;
 }
 function renderInvoiceControls(){
+  if(!isAdmin()){ $('invoiceControls').innerHTML='<div class="ro-note">View only — invoice details are locked. Sign in as an admin to edit.</div>'; return; }
   const inv=S.invoice;
   const itemRows=inv.items.map((it,i)=>`
     <div class="invrow"><input class="inp" value="${esc(it.label)}" oninput="Portal.invEdit(${i},'label',this.value)"><div class="money"><input class="inp" value="${it.amount}" oninput="Portal.invEdit(${i},'amount',this.value)"></div><button class="xbtn" onclick="Portal.invItemDel(${i})">✕</button></div>`).join('');
@@ -1214,6 +1229,7 @@ function payAdd(){ S.invoice.payments.push({id:'pm'+Date.now(),label:'',amount:0
 function payDel(i){ S.invoice.payments.splice(i,1); renderInvoiceControls(); renderInvoiceDoc(); }
 function payEdit(i,k,v){ S.invoice.payments[i][k]= k==='amount'?num(v):v; renderInvoiceDoc(); }
 function payToggle(i){
+  if(!isAdmin()) return;
   const p = S.invoice.payments[i];
   const justMarkedPaid = !p.paid; // about to flip false -> true
   p.paid = !p.paid;
@@ -1501,6 +1517,7 @@ async function pdfFromElement(elId){
 // Deletes a hold. Best-effort: a failed cleanup delete shouldn't block
 // creating its replacement, so this swallows errors rather than throwing.
 async function deleteHold(eventId){
+  if(!isAdmin()){ console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   if(!eventId || !token()) return;
   try{
     await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`,{
@@ -1509,6 +1526,7 @@ async function deleteHold(eventId){
   }catch(e){ console.warn('Could not delete old calendar hold '+eventId+':', e); }
 }
 async function createHold(){
+  if(!isAdmin()) throw new Error('View-only access -- cannot create a calendar hold.');
   const S=Portal._S(), t=Portal._quoteTotals(), inq=ctx.inquiry||{};
   if(!S.event.date) throw new Error('Set an event date before creating a hold.');
   const name=S.client.name||[inq.firstName,inq.lastName].filter(Boolean).join(' ');
@@ -1533,6 +1551,7 @@ async function createHold(){
   return j;
 }
 async function patchHold(){
+  if(!isAdmin()) throw new Error('View-only access -- cannot update the calendar hold.');
   const S=Portal._S();
   const date=S.event.date;
   if(!date) throw new Error('Set an event date first.');
@@ -1579,6 +1598,7 @@ async function patchHold(){
 // clobber whatever title is currently on the event. Best-effort and
 // one-way -- un-marking a deposit as paid does NOT revert this, by design.
 async function confirmCalendarHold(eventId){
+  if(!isAdmin()){ console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   if(!eventId || !token()) return false;
   try{
     const getR = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`,
@@ -1671,6 +1691,7 @@ function scheduleTitleSave(val){
   titleSaveTimer=setTimeout(()=>flushTitleSave(val),700);
 }
 async function flushTitleSave(val){
+  if(!isAdmin()) return;
   if(!ctx.active) return; // standalone (no tracked inquiry): title stays local only
   if(!token()){ titleStatus('err','Not signed in'); return; }
   const mySeq = ++titleSaveSeq;
@@ -1739,6 +1760,7 @@ async function loadCatalog(){
 }
 function getCatalog(){ return catalog; }
 async function persistCatalogItem(section,label,rate){
+  if(!isAdmin()) return;
   if(!ctx.active || !token()) return;
   const dupe = (catalog[section]||[]).some(c=>c.label.trim().toLowerCase()===label.trim().toLowerCase());
   if(dupe) return;
@@ -1767,6 +1789,7 @@ async function persistCatalogItem(section,label,rate){
 // was added to this quote before ever being saved), it's inserted fresh
 // with the new rate rather than silently doing nothing.
 async function saveCatalogRate(section,label,rate){
+  if(!isAdmin()) return;
   if(!ctx.active || !token() || !label) return;
   const match = (catalog[section]||[]).find(c=>c.label.trim().toLowerCase()===label.trim().toLowerCase());
   if(!match){ await persistCatalogItem(section,label,rate); return; }
@@ -1786,6 +1809,7 @@ async function saveCatalogRate(section,label,rate){
   }catch(e){ /* the quote itself already has the new price regardless -- catalog update is best-effort */ }
 }
 async function deleteCatalogItem(section,id){
+  if(!isAdmin()) return;
   const item = (catalog[section]||[]).find(c=>c.id===id);
   if(!item || !item.rowIndex || !token()) return;
   try{
@@ -1866,6 +1890,7 @@ function generateRefId(){
   return `EVT-${stamp}-${suffix}`;
 }
 async function createHubCard(){
+  if(!isAdmin()) return;
   if(ctx.active){ Portal._toast('Already saved to the hub.'); return; }
   if(!token()){ alert('Not signed in. Return to the hub and sign in, then come back to the quick tool.'); return; }
   const S=Portal._S();
@@ -1940,6 +1965,7 @@ function requireHub(){ if(!ctx.active){ alert('Open this from the hub to save to
 
 /* ---- actions ---- */
 async function saveQuote(withEmail){
+  if(!isAdmin()) return;
   if(!requireHub()) return;
   syncCoreInquiryFields();
   const S=Portal._S();
@@ -1983,6 +2009,7 @@ async function saveQuote(withEmail){
   });
 }
 async function saveContract(withEmail){
+  if(!isAdmin()) return;
   if(!requireHub()) return;
   syncCoreInquiryFields();
   const S=Portal._S();
@@ -2037,6 +2064,7 @@ async function draftOnly(subject, bodyHtml, busyLabel, opts){
 }
 
 async function sendFollowUp(){
+  if(!isAdmin()) return;
   const S=Portal._S(), t=Portal._quoteTotals();
   await draftOnly(
     `Carriage House: Following up on your quote`,
@@ -2052,6 +2080,7 @@ async function sendFollowUp(){
 }
 
 async function sendNoDate(){
+  if(!isAdmin()) return;
   const S=Portal._S();
   await draftOnly(
     `Carriage House: About your requested date`,
@@ -2066,6 +2095,7 @@ async function sendNoDate(){
 }
 
 async function sendPaymentReminder(){
+  if(!isAdmin()) return;
   const S=Portal._S(), t=Portal._invoiceTotals();
   await draftOnly(
     `Carriage House: Payment reminder for ${S.event.name||'your event'}`,
@@ -2087,6 +2117,7 @@ async function sendPaymentReminder(){
 }
 
 async function sendThankYou(){
+  if(!isAdmin()) return;
   const S=Portal._S();
   await draftOnly(
     `Carriage House: Thank you for celebrating with us`,
@@ -2101,6 +2132,7 @@ async function sendThankYou(){
 }
 
 async function saveInvoice(withEmail){
+  if(!isAdmin()) return;
   if(!requireHub()) return;
   syncCoreInquiryFields();
   const S=Portal._S();
@@ -2241,7 +2273,7 @@ function renderInquiryPanel(){
   gid('inqPanelName').textContent = name;
   gid('inqPanelRef').textContent = ctx.refId || '';
   gid('inqBody').innerHTML = body;
-  const btn=gid('inqEditBtn'); if(btn) btn.style.display = ctx.active ? '' : 'none';
+  const btn=gid('inqEditBtn'); if(btn) btn.style.display = (ctx.active && isAdmin()) ? '' : 'none';
 }
 
 // Same field set as the hub's detail-panel edit form, plain text inputs
@@ -2309,6 +2341,7 @@ function cancelInquiryEdit(){
   renderInquiryPanel();
 }
 async function saveInquiryEdits(){
+  if(!isAdmin()) return;
   const val=id=>{ const el=gid('inqEdit-'+id); return el?el.value.trim():''; };
   const updated={
     firstName:val('firstName'), lastName:val('lastName'), email:val('email'), phone:val('phone'),
@@ -2350,8 +2383,10 @@ function renderBar(){
     // no-inquiry shortcut): no Sheet-backed actions apply yet, but there's
     // still a hub to go back to, and a way to register this deal as a new
     // tracked card for events that never came through the intake form.
-    bar.innerHTML=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>
-      <button class="io-btn" onclick="Hub.createHubCard()">Save as new card</button>`;
+    bar.innerHTML = isAdmin()
+      ? `<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>
+      <button class="io-btn" onclick="Hub.createHubCard()">Save as new card</button>`
+      : `<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>`;
     return;
   }
   const stage=Portal._S().stage;
@@ -2359,6 +2394,12 @@ function renderBar(){
   let btns=`<button class="io-btn" onclick="Hub.backToHub()">← Hub</button>`;
   if(ctx.inquiry && Object.keys(ctx.inquiry).length){
     btns+=`<button class="io-btn" onclick="Hub.toggleInquiryPanel()">Inquiry</button>`;
+  }
+  if(!isAdmin()){
+    // Read-only: view the document, nothing that writes or sends.
+    const u=user();
+    bar.innerHTML=btns+`<span class="ref-chip" title="View only">View only</span>`+(u?`<span class="ref-chip" title="Signed in">${esc(u)}</span>`:'');
+    return;
   }
   if(stage==='quote'){
     btns+=`<button class="io-btn" onclick="Hub.saveQuote(false)">Save to Hub</button>
@@ -2402,6 +2443,7 @@ function start(){
   if(ctx.inquiry && ctx.inquiry.eventTitle) state.event.name = ctx.inquiry.eventTitle;
   Portal._load(state);
   syncTitleInputs(state.event.name);
+  const ti = gid('eventTitleInput'); if(ti) ti.disabled = !isAdmin();
   if(p.stage) Portal.go(p.stage);
   renderBar();
   loadCatalog();

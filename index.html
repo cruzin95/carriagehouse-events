@@ -42,10 +42,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .btn-gsi:hover{opacity:.92;border-color:var(--amber-dim)}
 .btn-gsi svg{flex-shrink:0}
 .auth-error{margin-top:16px;font-size:.8rem;color:var(--red);background:var(--red-soft);border:1px solid rgba(211,118,91,.35);border-radius:5px;padding:8px 12px;display:none}
-.gate-input{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:6px;padding:12px 14px;font-size:.9rem;color:var(--ink);font-family:inherit;text-align:center;letter-spacing:.1em;transition:.14s}
-.gate-input:focus{outline:none;border-color:var(--amber-dim)}
-.gate-btn{width:100%;margin-top:12px;background:var(--amber);border:1px solid var(--amber);color:#140f08;font-weight:700;font-family:inherit;font-size:.9rem;padding:12px;border-radius:6px;cursor:pointer;transition:.14s}
-.gate-btn:hover{background:#f4b04c;border-color:#f4b04c}
 
 /* ── HEADER ── */
 .site-header{background:rgba(14,13,10,.94);backdrop-filter:blur(10px);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--line)}
@@ -62,6 +58,14 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .mini-btn{font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid var(--line-2);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;margin-left:8px}
 .mini-btn:hover{border-color:var(--amber);color:var(--amber)}
 .mini-btn:disabled{opacity:.5;cursor:default}
+/* ── READ-ONLY MODE ── */
+body.read-only-mode .star-btn,
+body.read-only-mode .btn-new-inq{display:none!important}
+body.read-only-mode .status-select,
+body.read-only-mode .review-notes,
+body.read-only-mode #problem-checkbox,
+body.read-only-mode .star-detail-btn{opacity:.55;pointer-events:none;cursor:default}
+body.read-only-mode .rating-star{pointer-events:none;cursor:default}
 .header-btn:hover{background:var(--amber-soft);border-color:var(--amber-dim);color:var(--ink)}
 .user-chip{font-family:var(--mono);font-size:.65rem;color:var(--muted-2);letter-spacing:.04em}
 
@@ -275,18 +279,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 <body>
 
 <!-- ══ AUTH SCREEN ══════════════════════════════════════════════════ -->
-<div id="gate-screen" class="auth-wrap">
-  <div class="auth-card">
-    <div class="auth-logo">CARRIAGE HOUSE</div>
-    <div class="auth-eyebrow">Event Hub</div>
-    <div class="auth-desc">Enter the access code to continue.</div>
-    <input type="password" class="gate-input" id="gate-input" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter') checkGate()">
-    <button class="gate-btn" id="gate-btn" onclick="checkGate()">Continue</button>
-    <div class="auth-error" id="gate-error">Incorrect code. Try again.</div>
-  </div>
-</div>
-
-<div id="auth-screen" class="auth-wrap" style="display:none">
+<div id="auth-screen" class="auth-wrap">
   <div class="auth-card">
     <div class="auth-logo">CARRIAGE HOUSE</div>
     <div class="auth-eyebrow">Event Hub</div>
@@ -296,6 +289,15 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
       Sign in with Google
     </button>
     <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<div id="blocked-screen" class="auth-wrap" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">CARRIAGE HOUSE</div>
+    <div class="auth-eyebrow">Event Hub</div>
+    <div class="auth-desc">This Google account doesn't have access to the hub. If you think this is a mistake, contact <a href="mailto:lucas@carriagehouse.nyc" style="color:var(--amber)">lucas@carriagehouse.nyc</a>.</div>
+    <button class="btn-gsi" id="blocked-signout-btn" onclick="signOut()" style="justify-content:center">Sign out</button>
   </div>
 </div>
 
@@ -517,6 +519,24 @@ const COL = {
 // ═══════════════════════════════════════════════════════════════════════
 
 let tokenClient, accessToken = null, currentUserEmail = '', inquiries = [], selected = null;
+// ── Access tiers ─────────────────────────────────────────────────────
+// admin: full read/write (you). readonly: view everything, write nothing
+// (anyone else on the carriagehouse.nyc domain, assuming they've also been
+// given actual Viewer access to the underlying Sheet/Calendar in Google's
+// own sharing settings -- this check alone doesn't grant Google access,
+// it just decides what the UI shows once someone's signed in). blocked:
+// no access at all. This is intentionally a hardcoded allowlist, not
+// something editable from within the app.
+const ADMIN_EMAIL = 'lucas@carriagehouse.nyc';
+const ALLOWED_DOMAIN = 'carriagehouse.nyc';
+function roleFor(email) {
+  const e = (email || '').toLowerCase().trim();
+  if (e === ADMIN_EMAIL) return 'admin';
+  if (e.endsWith('@' + ALLOWED_DOMAIN)) return 'readonly';
+  return 'blocked';
+}
+let userRole = 'blocked';
+function isAdmin() { return userRole === 'admin'; }
 
 // ── SORT / STAR / FOLLOW-UP STATE ─────────────────────────────────────
 let sortBy  = 'dateAdded';
@@ -527,40 +547,9 @@ let showDead   = false; // Dead column hidden by default each session
 let showStale  = false; // Stale column hidden by default each session
 let detailEditMode = false; // whether the detail panel's Contact/Event/Logistics/Budget fields are editable
 
-// ── ACCESS GATE ─────────────────────────────────────────────────────────
-// A soft deterrent, not real security: this all runs in the browser, so
-// GATE_CODE below is technically visible to anyone who views source, same
-// as everything else on this static page. It keeps the board from being
-// the first thing a casual visitor sees when landing on the URL -- it does
-// not add protection beyond that. The actual access control is still the
-// Google sign-in screen behind it, and the Sheet's own sharing settings.
-const GATE_CODE = '1070';
-const GATE_KEY  = '170e_gate_ok';
-
-function checkGate(){
-  const input = document.getElementById('gate-input');
-  const err   = document.getElementById('gate-error');
-  if (input.value === GATE_CODE) {
-    localStorage.setItem(GATE_KEY, '1');
-    err.style.display = 'none';
-    document.getElementById('gate-screen').style.display = 'none';
-    document.getElementById('auth-screen').style.display = 'flex';
-  } else {
-    err.style.display = 'block';
-    input.value = '';
-    input.focus();
-  }
-}
-
 // ── INIT ──────────────────────────────────────────────────────────────
 
 window.addEventListener('load', () => {
-  // Skip the gate entirely once this device has already unlocked it once.
-  if (localStorage.getItem(GATE_KEY) === '1') {
-    document.getElementById('gate-screen').style.display = 'none';
-    document.getElementById('auth-screen').style.display = 'flex';
-  }
-
   // starredIds & followups are rebuilt from the Sheet on every load (see loadInquiries)
 
   // Handle returns from quote/contract tools
@@ -571,9 +560,11 @@ window.addEventListener('load', () => {
   if (saved) {
     accessToken = saved;
     currentUserEmail = sessionStorage.getItem('170e_user') || '';
+    userRole = roleFor(currentUserEmail);
     if (currentUserEmail) document.getElementById('user-chip').textContent = currentUserEmail;
-    showApp();
-    loadInquiries();
+    if (userRole === 'blocked') { showBlocked(); }
+    else { showApp(); loadInquiries(); }
+    applyRoleUI();
   }
 
   // Init GIS (loads async)
@@ -598,13 +589,17 @@ function onToken(resp) {
   if (resp.error) { showAuthError('Sign-in failed: ' + resp.error); return; }
   accessToken = resp.access_token;
   sessionStorage.setItem('170e_token', accessToken);
-  // Fetch user info for "last updated by"
+  // Fetch user info for "last updated by" and to decide access tier
   fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` }
   }).then(r => r.json()).then(info => {
     currentUserEmail = info.email || '';
     sessionStorage.setItem('170e_user', currentUserEmail);
+    userRole = roleFor(currentUserEmail);
+    sessionStorage.setItem('170e_role', userRole);
     document.getElementById('user-chip').textContent = currentUserEmail;
+    if (userRole === 'blocked') { showBlocked(); return; }
+    applyRoleUI();
   }).catch(() => {});
   showApp();
   loadInquiries();
@@ -613,14 +608,36 @@ function onToken(resp) {
 function signOut() {
   if (accessToken && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(accessToken);
   sessionStorage.clear();
-  accessToken = null; inquiries = []; selected = null;
+  accessToken = null; inquiries = []; selected = null; userRole = 'blocked';
   document.getElementById('app').style.display = 'none';
+  document.getElementById('blocked-screen').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
 
 function showApp() {
   document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('blocked-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+}
+
+function showBlocked() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('blocked-screen').style.display = 'flex';
+}
+
+// Toggles the write-capable chrome on/off based on userRole. Called once
+// the role is known (which may be a beat after showApp(), since it depends
+// on the async userinfo fetch) -- the actual write functions each also
+// check userRole themselves, so a brief flash of an editable-looking
+// control before this runs is a cosmetic issue at worst, never a security
+// one.
+function applyRoleUI() {
+  const chip = document.getElementById('user-chip');
+  if (chip) chip.textContent = currentUserEmail + (userRole === 'readonly' ? ' · view only' : '');
+  document.body.classList.toggle('read-only-mode', userRole !== 'admin');
+  const newInqBtn = document.querySelector('.btn-new-inq-portal, [onclick="goToPortalBlank()"]');
+  if (newInqBtn) newInqBtn.style.display = (userRole === 'admin') ? '' : 'none';
 }
 
 function showAuthError(msg) {
@@ -774,6 +791,7 @@ function rowValues(inq, o) {
 }
 
 async function writeRow(rowIndex, values) {
+  if (!isAdmin()) { console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   const startLetter = colLetter(COL.status);          // Z
   const endLetter   = colLetter(COL.lastAutoDraftAt);  // AK
   const range = encodeURIComponent(`${CONFIG.TAB}!${startLetter}${rowIndex}:${endLetter}${rowIndex}`);
@@ -796,6 +814,7 @@ async function writeRow(rowIndex, values) {
 // that milestone. Its own tiny write, separate from the Z:AK batch, so it
 // can never race with or overwrite status/quote data.
 async function writeAttribution(rowIndex, field, email) {
+  if (!isAdmin()) { console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   const letter = colLetter(COL[field]);
   const range = encodeURIComponent(`${CONFIG.TAB}!${letter}${rowIndex}:${letter}${rowIndex}`);
   const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
@@ -891,6 +910,7 @@ window.runAttributionBackfill = runAttributionBackfill;
 // Z:AK hub-managed range. Used by the detail panel's edit mode. `values`
 // must be 25 entries starting with timestamp, refId.
 async function writeInquiryFields(rowIndex, values) {
+  if (!isAdmin()) { console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   const range = encodeURIComponent(`${CONFIG.TAB}!A${rowIndex}:Y${rowIndex}`);
   const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
 
@@ -910,6 +930,7 @@ async function writeInquiryFields(rowIndex, values) {
 // rating or a note can never race with or overwrite status/quote data/
 // contact info, and vice versa.
 async function writeInternalReview(rowIndex, { rating, notes, problemClient }) {
+  if (!isAdmin()) { console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   const range = encodeURIComponent(`${CONFIG.TAB}!AN${rowIndex}:AP${rowIndex}`);
   const url   = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${range}?valueInputOption=RAW`;
 
@@ -1139,11 +1160,12 @@ function openDetail(refId) {
   selected = inquiries.find(i => i.refId === refId);
   if (!selected) return;
   detailEditMode = false;
-  document.getElementById('detail-edit-btn').style.display = '';
+  document.getElementById('detail-edit-btn').style.display = isAdmin() ? '' : 'none';
 
   document.getElementById('d-ref').textContent  = selected.refId;
   document.getElementById('d-name').textContent = `${selected.firstName} ${selected.lastName}`.trim();
   document.getElementById('d-status').value     = selected.status || 'new';
+  document.getElementById('d-status').disabled  = !isAdmin();
 
   const badge = document.getElementById('d-status-badge');
   const s = selected.status || 'new';
@@ -1154,11 +1176,15 @@ function openDetail(refId) {
     (repeatFlags[selected.refId] ? '<span class="repeat-tag" title="Returning client">↻ Repeat</span>' : '') +
     (problemFlags[selected.refId] ? '<span class="flag-tag" title="Flagged client">⚠ Flagged</span>' : '');
 
-  // Sync internal review (rating, notes, problem flag) -- always editable,
-  // independent of the Contact/Event edit-mode toggle.
+  // Sync internal review (rating, notes, problem flag) -- always editable
+  // for admins, independent of the Contact/Event edit-mode toggle. Disabled
+  // outright for read-only/blocked users.
   document.getElementById('star-rating').innerHTML = renderStarRating(selected.eventRating || 0);
   document.getElementById('review-notes').value = selected.internalNotes || '';
+  document.getElementById('review-notes').disabled = !isAdmin();
   document.getElementById('problem-checkbox').checked = !!selected.problemClient;
+  document.getElementById('problem-checkbox').disabled = !isAdmin();
+  document.getElementById('star-detail-btn').disabled = !isAdmin();
   document.getElementById('review-save-status').textContent = '';
   renderReviewWarning(selected);
 
@@ -1245,7 +1271,7 @@ function renderDetailBody(inq) {
 
     ${inq.notes ? `<div class="d-section"><div class="d-section-title">Notes</div><div class="d-notes">${escHtml(inq.notes)}</div></div>` : ''}
 
-    ${(inq.lastUpdatedBy || inq.calendarEventId || inq.quotedBy || inq.contractedBy || inq.invoicedBy) ? `<div class="d-section"><div class="d-section-title">Activity</div>${inq.quotedBy ? row('Quoted by', escHtml(inq.quotedBy)) : ''}${inq.contractedBy ? row('Contracted by', escHtml(inq.contractedBy)) : ''}${inq.invoicedBy ? row('Invoiced by', escHtml(inq.invoicedBy)) : ''}${inq.lastUpdatedBy ? row('Last updated by', escHtml(inq.lastUpdatedBy)) : ''}${inq.calendarEventId ? row('Calendar hold', `${calendarEventLink(inq.calendarEventId) ? `<a href="${calendarEventLink(inq.calendarEventId)}" target="_blank" rel="noopener">✓ Open in Calendar →</a>` : '✓ Created'} <button class="mini-btn" onclick="confirmCalendarHoldEl(this,'${escHtml(inq.refId)}')" title="Set this hold's status to CONFIRMED on the calendar, regardless of payment status">Mark CONFIRMED</button>`) : ''}</div>` : ''}
+    ${(inq.lastUpdatedBy || inq.calendarEventId || inq.quotedBy || inq.contractedBy || inq.invoicedBy) ? `<div class="d-section"><div class="d-section-title">Activity</div>${inq.quotedBy ? row('Quoted by', escHtml(inq.quotedBy)) : ''}${inq.contractedBy ? row('Contracted by', escHtml(inq.contractedBy)) : ''}${inq.invoicedBy ? row('Invoiced by', escHtml(inq.invoicedBy)) : ''}${inq.lastUpdatedBy ? row('Last updated by', escHtml(inq.lastUpdatedBy)) : ''}${inq.calendarEventId ? row('Calendar hold', `${calendarEventLink(inq.calendarEventId) ? `<a href="${calendarEventLink(inq.calendarEventId)}" target="_blank" rel="noopener">✓ Open in Calendar →</a>` : '✓ Created'} ${isAdmin() ? `<button class="mini-btn" onclick="confirmCalendarHoldEl(this,'${escHtml(inq.refId)}')" title="Set this hold's status to CONFIRMED on the calendar, regardless of payment status">Mark CONFIRMED</button>` : ''}`) : ''}</div>` : ''}
 
     ${hasQt ? `
     <div class="d-section">
@@ -1335,6 +1361,7 @@ function renderDetailBodyEdit(inq) {
 }
 
 function toggleDetailEdit() {
+  if (!isAdmin()) return;
   if (!selected) return;
   detailEditMode = true;
   document.getElementById('detail-body').innerHTML = renderDetailBodyEdit(selected);
@@ -1348,6 +1375,7 @@ function cancelDetailEdit() {
 }
 
 async function saveDetailEdits() {
+  if (!isAdmin()) return;
   if (!selected) return;
   const inq = inquiries.find(i => i.refId === selected.refId);
   if (!inq) return;
@@ -1428,6 +1456,7 @@ function reviewNotesInput(val) {
 }
 
 function setRating(n) {
+  if (!isAdmin()) return;
   if (!selected) return;
   selected.eventRating = (selected.eventRating === n) ? 0 : n; // click the same star again to clear
   document.getElementById('star-rating').innerHTML = renderStarRating(selected.eventRating);
@@ -1435,6 +1464,7 @@ function setRating(n) {
 }
 
 function toggleProblemFlag() {
+  if (!isAdmin()) return;
   if (!selected) return;
   selected.problemClient = document.getElementById('problem-checkbox').checked;
   flushReviewSave();
@@ -1467,6 +1497,7 @@ async function flushReviewSave() {
 }
 
 async function changeStatus() {
+  if (!isAdmin()) return;
   if (!selected) return;
   const newStatus = document.getElementById('d-status').value;
   const inq = inquiries.find(i => i.refId === selected.refId);
@@ -1503,6 +1534,7 @@ async function changeStatus() {
 // ── NAVIGATION TO TOOLS ──────────────────────────────────────────────
 
 function goToPortalBlank() {
+  if (!isAdmin()) return;
   // Standalone tool, no tracked inquiry: clear any leftover hub prefill so a
   // stale card selection can't leak into a fresh session, then hand off to the
   // portal's own already-standalone mode (JSON save/load, no Sheet writes).
@@ -1595,6 +1627,7 @@ async function checkCalendarAvailability(dateStr, excludeEventId) {
 // network failure, so a transient error doesn't silently orphan the
 // reference in the Sheet.
 async function deleteCalendarHold(eventId) {
+  if (!isAdmin()) { console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   if (!eventId || !accessToken) return false;
   try {
     const CAL_ID = encodeURIComponent('170Eldridge@gmail.com');
@@ -1613,6 +1646,7 @@ async function deleteCalendarHold(eventId) {
 // (comped events, off-book arrangements, etc). GETs first so the summary
 // rewrite doesn't clobber whatever title is currently on the event.
 async function confirmCalendarHold(eventId) {
+  if (!isAdmin()) { console.warn('Write blocked -- read-only or unauthorized user'); return false; }
   if (!eventId || !accessToken) return false;
   try {
     const CAL_ID = encodeURIComponent('170Eldridge@gmail.com');
@@ -1884,6 +1918,7 @@ function toggleDeadColumn() {
 //   starredIds[refId] === undefined  → never seen (eligible for auto-prioritize)
 
 async function toggleStar(refId, e) {
+  if (!isAdmin()) return;
   e.stopPropagation();
   const inq = inquiries.find(i => i.refId === refId);
   if (!inq) return;
@@ -1898,6 +1933,7 @@ async function toggleStar(refId, e) {
 }
 
 async function toggleStarFromDetail() {
+  if (!isAdmin()) return;
   if (!selected) return;
   const refId = selected.refId;
   const inq = inquiries.find(i => i.refId === refId);

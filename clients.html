@@ -39,10 +39,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .btn-gsi:hover{opacity:.92;border-color:var(--amber-dim)}
 .btn-gsi svg{flex-shrink:0}
 .auth-error{margin-top:16px;font-size:.8rem;color:var(--red);background:var(--red-soft);border:1px solid rgba(211,118,91,.35);border-radius:5px;padding:8px 12px;display:none}
-.gate-input{width:100%;background:var(--surface-3);border:1px solid var(--line-2);border-radius:6px;padding:12px 14px;font-size:.9rem;color:var(--ink);font-family:inherit;text-align:center;letter-spacing:.1em;transition:.14s}
-.gate-input:focus{outline:none;border-color:var(--amber-dim)}
-.gate-btn{width:100%;margin-top:14px;background:var(--amber);border:none;border-radius:6px;padding:12px;font-family:var(--body);font-size:.875rem;font-weight:600;color:#140f08;cursor:pointer;transition:.15s}
-.gate-btn:hover{background:#f4b04c}
 
 /* ── SHELL ── */
 .site-header{background:rgba(14,13,10,.94);backdrop-filter:blur(10px);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--line)}
@@ -120,18 +116,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 </head>
 <body>
 
-<div id="gate-screen" class="auth-wrap">
-  <div class="auth-card">
-    <div class="auth-logo">CARRIAGE HOUSE</div>
-    <div class="auth-eyebrow">Event Hub</div>
-    <div class="auth-desc">Enter the access code to continue.</div>
-    <input type="password" class="gate-input" id="gate-input" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter') checkGate()">
-    <button class="gate-btn" id="gate-btn" onclick="checkGate()">Continue</button>
-    <div class="auth-error" id="gate-error">Incorrect code. Try again.</div>
-  </div>
-</div>
-
-<div id="auth-screen" class="auth-wrap" style="display:none">
+<div id="auth-screen" class="auth-wrap">
   <div class="auth-card">
     <div class="auth-logo">CARRIAGE HOUSE</div>
     <div class="auth-eyebrow">Event Hub</div>
@@ -141,6 +126,15 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
       Sign in with Google
     </button>
     <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<div id="blocked-screen" class="auth-wrap" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">CARRIAGE HOUSE</div>
+    <div class="auth-eyebrow">Event Hub</div>
+    <div class="auth-desc">This Google account doesn't have access to the hub. If you think this is a mistake, contact <a href="mailto:lucas@carriagehouse.nyc" style="color:var(--amber)">lucas@carriagehouse.nyc</a>.</div>
+    <button class="btn-gsi" id="blocked-signout-btn" onclick="signOut()" style="justify-content:center">Sign out</button>
   </div>
 </div>
 
@@ -207,37 +201,28 @@ let inquiries = [];
 let clients = []; // grouped
 let sortBy = 'recent';
 
-// ── ACCESS GATE (identical to index.html) ──────────────────────────────
-const GATE_CODE = '1070';
-const GATE_KEY  = '170e_gate_ok';
-function checkGate(){
-  const input = document.getElementById('gate-input');
-  const err   = document.getElementById('gate-error');
-  if (input.value === GATE_CODE) {
-    localStorage.setItem(GATE_KEY, '1');
-    err.style.display = 'none';
-    document.getElementById('gate-screen').style.display = 'none';
-    document.getElementById('auth-screen').style.display = 'flex';
-  } else {
-    err.style.display = 'block';
-    input.value = '';
-    input.focus();
-  }
+// ── Access tiers (identical policy to index.html; this page has no write
+// operations at all, so admin vs readonly render identically here) ─────
+const ADMIN_EMAIL = 'lucas@carriagehouse.nyc';
+const ALLOWED_DOMAIN = 'carriagehouse.nyc';
+function roleFor(email) {
+  const e = (email || '').toLowerCase().trim();
+  if (e === ADMIN_EMAIL) return 'admin';
+  if (e.endsWith('@' + ALLOWED_DOMAIN)) return 'readonly';
+  return 'blocked';
 }
+let userRole = 'blocked';
 
 // ── INIT ──────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  if (localStorage.getItem(GATE_KEY) === '1') {
-    document.getElementById('gate-screen').style.display = 'none';
-    document.getElementById('auth-screen').style.display = 'flex';
-  }
   const saved = sessionStorage.getItem('170e_token');
   if (saved) {
     accessToken = saved;
     currentUserEmail = sessionStorage.getItem('170e_user') || '';
+    userRole = roleFor(currentUserEmail);
     if (currentUserEmail) document.getElementById('user-chip').textContent = currentUserEmail;
-    showApp();
-    loadInquiries();
+    if (userRole === 'blocked') { showBlocked(); }
+    else { showApp(); loadInquiries(); }
   }
   const t = setInterval(() => {
     if (window.google?.accounts?.oauth2) {
@@ -263,7 +248,10 @@ function onToken(resp) {
     .then(r=>r.json()).then(info=>{
       currentUserEmail = info.email || '';
       sessionStorage.setItem('170e_user', currentUserEmail);
-      document.getElementById('user-chip').textContent = currentUserEmail;
+      userRole = roleFor(currentUserEmail);
+      sessionStorage.setItem('170e_role', userRole);
+      document.getElementById('user-chip').textContent = currentUserEmail + (userRole === 'readonly' ? ' · view only' : '');
+      if (userRole === 'blocked') showBlocked();
     }).catch(()=>{});
   showApp();
   loadInquiries();
@@ -271,14 +259,20 @@ function onToken(resp) {
 function signOut() {
   if (accessToken && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(accessToken);
   sessionStorage.clear();
-  accessToken = null;
+  accessToken = null; userRole = 'blocked';
   document.getElementById('app').style.display = 'none';
+  document.getElementById('blocked-screen').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
 function showApp() {
-  document.getElementById('gate-screen').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('blocked-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+}
+function showBlocked() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('blocked-screen').style.display = 'flex';
 }
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
