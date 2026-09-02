@@ -1213,7 +1213,15 @@ function invEdit(i,k,v){ S.invoice.items[i][k]= k==='amount'?num(v):v; renderInv
 function payAdd(){ S.invoice.payments.push({id:'pm'+Date.now(),label:'',amount:0,paid:false}); renderInvoiceControls(); renderInvoiceDoc(); }
 function payDel(i){ S.invoice.payments.splice(i,1); renderInvoiceControls(); renderInvoiceDoc(); }
 function payEdit(i,k,v){ S.invoice.payments[i][k]= k==='amount'?num(v):v; renderInvoiceDoc(); }
-function payToggle(i){ S.invoice.payments[i].paid=!S.invoice.payments[i].paid; renderInvoiceControls(); renderInvoiceDoc(); }
+function payToggle(i){
+  const p = S.invoice.payments[i];
+  const justMarkedPaid = !p.paid; // about to flip false -> true
+  p.paid = !p.paid;
+  renderInvoiceControls(); renderInvoiceDoc();
+  if(justMarkedPaid && /deposit/i.test(p.label||'') && ctx.calendarEventId && window.Hub && Hub.confirmCalendarHold){
+    Hub.confirmCalendarHold(ctx.calendarEventId);
+  }
+}
 function pullInvoiceBtn(){ pullInvoice(); renderInvoiceControls(); renderInvoiceDoc(); toast('Pulled from quote'); }
 function pushToInvoice(){ pullInvoice(); renderInvoice(); go('invoice'); toast('Invoice built from quote'); }
 function invoicePlainText(){
@@ -1565,6 +1573,27 @@ async function patchHold(){
   const j=await r.json();
   ctx.calendarEventId=j.id;
   return j;
+}
+// Flips a calendar hold from HOLD/tentative to CONFIRMED once the deposit's
+// in. GETs first rather than a blind PATCH so the summary rewrite doesn't
+// clobber whatever title is currently on the event. Best-effort and
+// one-way -- un-marking a deposit as paid does NOT revert this, by design.
+async function confirmCalendarHold(eventId){
+  if(!eventId || !token()) return false;
+  try{
+    const getR = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`,
+      { headers:{ Authorization:`Bearer ${token()}` } });
+    if(!getR.ok) return false;
+    const ev = await getR.json();
+    let summary = ev.summary || '';
+    if(!/^CONFIRMED\s*—/.test(summary)) summary = `CONFIRMED — ${summary.replace(/^HOLD\s*—\s*/,'')}`;
+    const patchR = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`, {
+      method:'PATCH',
+      headers:{ Authorization:`Bearer ${token()}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ status:'confirmed', summary }),
+    });
+    return patchR.ok;
+  }catch(e){ console.warn('Could not confirm calendar hold', eventId, e); return false; }
 }
 
 /* ---- Gmail draft ---- */
@@ -2384,7 +2413,7 @@ const _go = Portal.go;
 Portal.go = function(s){ _go(s); renderBar(); };
 
 return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, sendFollowUp, sendNoDate, sendPaymentReminder, sendThankYou,
-  onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, saveCatalogRate, deleteCatalogItem,
+  onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, saveCatalogRate, deleteCatalogItem, confirmCalendarHold,
   onDateInput, repaintDateAvail, checkDateAvailability, createHubCard,
   toggleInquiryEdit, saveInquiryEdits, cancelInquiryEdit,
   _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText, _draftOnly:draftOnly };

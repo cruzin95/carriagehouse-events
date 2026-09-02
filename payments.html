@@ -382,6 +382,32 @@ async function writeRow(inq) {
   return resp.ok;
 }
 
+// Flips a calendar hold from HOLD/tentative to CONFIRMED once the deposit's
+// in. GETs first (rather than a blind PATCH) so the summary rewrite doesn't
+// clobber whatever title portal.html last set. Best-effort and one-way --
+// never called on the reverse toggle (un-marking a deposit as paid does NOT
+// revert this), per George.
+const CAL_ID = encodeURIComponent('170Eldridge@gmail.com');
+async function confirmCalendarHold(eventId) {
+  if (!eventId || !accessToken) return false;
+  try {
+    const getR = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (getR.status === 401) { handleAuthExpired(); return false; }
+    if (!getR.ok) return false;
+    const ev = await getR.json();
+    let summary = ev.summary || '';
+    if (!/^CONFIRMED\s*—/.test(summary)) summary = `CONFIRMED — ${summary.replace(/^HOLD\s*—\s*/, '')}`;
+    const patchR = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}/events/${encodeURIComponent(eventId)}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'confirmed', summary }),
+    });
+    if (patchR.status === 401) { handleAuthExpired(); return false; }
+    return patchR.ok;
+  } catch (e) { console.warn('Could not confirm calendar hold', eventId, e); return false; }
+}
+
 // ── INVOICE MATH ─────────────────────────────────────────────────────
 function invoiceTotals(inv) {
   const items = (inv.items||[]).reduce((a,i) => a + (parseFloat(i.amount)||0), 0);
@@ -530,10 +556,18 @@ function renderStatsOnly() {
 
 function payToggle(refId, i) {
   const inq = findInq(refId); if (!inq) return;
-  inq.invoiceData.payments[i].paid = !inq.invoiceData.payments[i].paid;
+  const payment = inq.invoiceData.payments[i];
+  const justMarkedPaid = !payment.paid; // about to flip false -> true
+  payment.paid = !payment.paid;
   inq.invoiceTotal = invoiceTotals(inq.invoiceData).items;
   refreshCard(inq);
   persist(inq);
+  // Marking the deposit specifically as paid confirms the calendar hold.
+  // Only fires on that false->true transition, only for a payment labeled
+  // "deposit", and only if there's a hold to update at all.
+  if (justMarkedPaid && /deposit/i.test(payment.label || '') && inq.calendarEventId) {
+    confirmCalendarHold(inq.calendarEventId);
+  }
 }
 function payEdit(refId, i, key, val) {
   const inq = findInq(refId); if (!inq) return;
