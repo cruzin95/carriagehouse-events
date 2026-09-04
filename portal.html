@@ -80,6 +80,8 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .hint{font-family:var(--mono);font-size:10px;color:var(--muted-2);margin-top:4px;letter-spacing:.02em}
+.doc-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);padding:6px 0;cursor:pointer}
+.doc-check input{cursor:pointer}
 
 /* prefix input (money) */
 .money{position:relative}
@@ -442,6 +444,7 @@ function freshState(){
       cancTier1:30, cancTier2:14,
       residential:{ on:false, checkIn:'', checkOut:'' },
       governingState:'New York',
+      docIds:[], // Drive file ids from the Client-Facing folder, selected to link in the contract email
       sections:{
         definitions:true, grant:true, rental:true, residential:false, areas:true,
         staffing:true, entry:true, noise:true, smoking:true, insurance:true,
@@ -1090,7 +1093,38 @@ function renderContractControls(){
   <div class="panel">
     <div class="panel-head"><span class="slash">//</span><h3>Include Sections</h3><span class="ph-right">${incCount}/${SEC.length}</span></div>
     <div class="panel-body">${secList}</div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="slash">//</span><h3>Documents to Send</h3><span class="ph-right">${S.contract.docIds.length} selected</span></div>
+    <div class="panel-body" id="contractDocsPanel">${clientFilesPanelHtml()}</div>
   </div>`;
+  if(clientFiles===null) loadClientFiles();
+}
+// Files listed here always come from the "Client-Facing" Drive folder only
+// -- Team Only files never show up as an option, so there's no way to
+// accidentally pick an internal file for a client email. Selection state
+// lives in S.contract.docIds (persisted with the rest of the contract) and
+// survives a save/reload of the deal.
+let clientFiles = null; // null = not loaded yet, [] = loaded & empty
+async function loadClientFiles(){
+  if(!window.Hub || !Hub.listClientFiles) return;
+  clientFiles = await Hub.listClientFiles();
+  const panel = $('contractDocsPanel');
+  if(panel) panel.innerHTML = clientFilesPanelHtml();
+}
+function clientFilesPanelHtml(){
+  if(clientFiles===null) return `<div class="hint">Loading files…</div>`;
+  if(!clientFiles.length) return `<div class="hint">No client-facing files yet. Add some on the <a href="files.html" target="_blank" style="color:var(--amber)">Files</a> page.</div>`;
+  return clientFiles.map(f=>{
+    const checked = S.contract.docIds.includes(f.id);
+    return `<label class="doc-check"><input type="checkbox" ${checked?'checked':''} onchange="Portal.toggleContractDoc('${f.id}')"> ${esc(f.name)}</label>`;
+  }).join('');
+}
+function toggleContractDoc(id){
+  if(!isAdmin()) return;
+  const i = S.contract.docIds.indexOf(id);
+  if(i===-1) S.contract.docIds.push(id); else S.contract.docIds.splice(i,1);
+  renderContractControls();
 }
 function renderContractDoc(){ $('contractDoc').innerHTML = contractDocHtml() + `
   <div class="actions no-print">
@@ -1289,7 +1323,7 @@ return { go, togglePresent, set, toggleProd, prodEdit, staffEdit, prodRateCommit
   toggleSec, toggleCustomBase, setCustomBase, toggleDepCredit,
   prodDel, staffDel, prodAddCustom, staffAddCustom, prodAddFromCatalogEl, staffAddFromCatalogEl, prodDelCatalogEl, staffDelCatalogEl,
   sponsorAdd, sponsorDel, sponsorEdit, copyQuote,
-  pushToContract, contractSet, toggleSection, resToggle, resSet, copyContract,
+  pushToContract, contractSet, toggleSection, resToggle, resSet, copyContract, toggleContractDoc,
   pushToInvoice, pullInvoice:pullInvoiceBtn, invSet, invItemAdd, invItemDel, invEdit,
   payAdd, payDel, payEdit, payToggle, copyInvoice,
   newDeal, exportJSON, importJSON,
@@ -1302,7 +1336,7 @@ return { go, togglePresent, set, toggleProd, prodEdit, staffEdit, prodRateCommit
   _invoiceText:()=>invoicePlainText(),
   _pullInvoice:()=>pullInvoice(),
   _fresh:()=>freshState(),
-  _load:(obj)=>{ S=Object.assign(freshState(),obj); boot(); },
+  _load:(obj)=>{ S=Object.assign(freshState(),obj); if(!Array.isArray(S.contract.docIds)) S.contract.docIds=[]; boot(); },
   _boot:()=>boot(),
   _toast:(m)=>toast(m),
   _refreshControls:()=>renderQuoteControls(),
@@ -1614,6 +1648,46 @@ async function confirmCalendarHold(eventId){
     });
     return patchR.ok;
   }catch(e){ console.warn('Could not confirm calendar hold', eventId, e); return false; }
+}
+
+// Read-only Drive lookup, available to admin AND readonly viewers alike --
+// picking documents happens only in the controls panel (admin-only, since
+// the whole panel is hidden for read-only users), but readonly viewers
+// still need this to render the DOCUMENT LINKS a saved contract already
+// has selected when they open it to view. Mirrors files.html's folder
+// resolution but only ever reads the Client-Facing folder -- Team Only
+// files are never fetched from this page at all.
+const DRIVE_PARENT_NAME = 'Carriage House Files';
+const DRIVE_CLIENT_NAME = 'Client-Facing';
+let _clientFolderId = null;
+async function driveFindFolder(name, parentId){
+  const q = encodeURIComponent(
+    `name='${name.replace(/'/g,"\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false` +
+    (parentId ? ` and '${parentId}' in parents` : ` and 'root' in parents`)
+  );
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`,
+    { headers:{ Authorization:`Bearer ${token()}` } });
+  if(!r.ok) return null;
+  const j = await r.json();
+  return (j.files && j.files[0]) ? j.files[0].id : null;
+}
+async function listClientFiles(){
+  if(!token()) return [];
+  try{
+    if(!_clientFolderId){
+      const parent = await driveFindFolder(DRIVE_PARENT_NAME, null);
+      if(!parent) return []; // no files library set up yet -- nothing to offer
+      _clientFolderId = await driveFindFolder(DRIVE_CLIENT_NAME, parent);
+      if(!_clientFolderId) return [];
+    }
+    const q = encodeURIComponent(`'${_clientFolderId}' in parents and trashed=false`);
+    const fields = encodeURIComponent('files(id,name,webViewLink)');
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&orderBy=name`,
+      { headers:{ Authorization:`Bearer ${token()}` } });
+    if(!r.ok) return [];
+    const j = await r.json();
+    return j.files || [];
+  }catch(e){ return []; }
 }
 
 /* ---- Gmail draft ---- */
@@ -2022,6 +2096,21 @@ async function saveContract(withEmail){
       if(hold&&hold.id) calendarEventId=hold.id;
       const x=Portal._contractCtx();
       const pdfB64 = await pdfFromElement('contractDoc');
+      // Re-fetch fresh rather than trust whatever's cached in the controls
+      // panel -- guarantees the links in the email match what's actually
+      // in the Client-Facing folder right now, and this is cheap once the
+      // folder id is cached from an earlier lookup.
+      const docIds = S.contract.docIds||[];
+      let docsHtml = '';
+      if(docIds.length){
+        const files = (await listClientFiles()).filter(f=>docIds.includes(f.id));
+        if(files.length){
+          docsHtml = `<div style="background:#fbf6ec;border:1px solid #e6d9bd;padding:20px 22px;margin:0 0 16px">
+            <div style="font-family:'Courier New',Courier,monospace;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#a87524;margin-bottom:12px">Documents</div>
+            ${files.map(f=>`<div style="font-size:14px;margin-bottom:6px"><a href="${f.webViewLink}" style="color:#a87524">${esc(f.name)} →</a></div>`).join('')}
+          </div>`;
+        }
+      }
       await gmailDraft(
         S.client.email,
         `Carriage House: Rental Agreement for ${S.event.name||'Your Event'}`,
@@ -2031,6 +2120,7 @@ async function saveContract(withEmail){
             <div style="font-size:14px;margin-bottom:6px">Total: <strong style="color:#a87524">$${x.total.toLocaleString('en-US')}</strong></div>
             <div style="font-size:14px">Security deposit: <strong>$${x.deposit.toLocaleString('en-US')}</strong> ${x.credited?'(credited to total)':'(refundable)'}</div>
           </div>
+          ${docsHtml}
           <p style="margin:0 0 16px">Review, sign, and send it back whenever you're ready. The deposit is due on signing to hold the date. We can also hop on a call or set up a walkthrough if anything needs discussing.</p>
           <p style="margin:0 0 4px">Best,</p>
           <p style="margin:0 0 4px">Lucas</p>
@@ -2455,7 +2545,7 @@ const _go = Portal.go;
 Portal.go = function(s){ _go(s); renderBar(); };
 
 return { start, renderBar, onRender:renderBar, saveQuote, saveContract, saveInvoice, backToHub, toggleInquiryPanel, sendFollowUp, sendNoDate, sendPaymentReminder, sendThankYou,
-  onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, saveCatalogRate, deleteCatalogItem, confirmCalendarHold,
+  onTitleInput, flushTitleSave, getCatalog, persistCatalogItem, saveCatalogRate, deleteCatalogItem, confirmCalendarHold, listClientFiles,
   onDateInput, repaintDateAvail, checkDateAvailability, createHubCard,
   toggleInquiryEdit, saveInquiryEdits, cancelInquiryEdit,
   _ctx:()=>ctx, _to24:to24, _hoursBetween:hoursBetween, _isoNY:isoNY, _pdfFromElement:pdfFromElement, _getPrintCssText:getPrintCssText, _draftOnly:draftOnly };

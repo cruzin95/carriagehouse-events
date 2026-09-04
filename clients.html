@@ -153,6 +153,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
     <a href="calendar.html" class="hub-nav-link">Calendar</a>
     <a href="clients.html" class="hub-nav-link active">Clients</a>
     <a href="payments.html" class="hub-nav-link">Payments</a>
+    <a href="files.html" class="hub-nav-link">Files</a>
   </nav>
 
   <div class="page">
@@ -229,7 +230,7 @@ window.addEventListener('load', () => {
       clearInterval(t);
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/userinfo.email',
+        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive',
         callback: onToken,
       });
     }
